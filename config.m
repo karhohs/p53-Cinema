@@ -14,21 +14,26 @@
 <wavelength>
     <number>1</number>
     <label></label>
+    <exposure units="ms"></exposure>
 </wavelength>
 <wavelength>
     <number>2</number>
     <label></label>
+    <exposure units="ms"></exposure>
 </wavelength>
 <wavelength>
     <number>3</number>
     <label></label>
+    <exposure units="ms"></exposure>
 </wavelength>
 <wavelength>
     <number>4</number>
     <label></label>
+    <exposure units="ms"></exposure>
 </wavelength>
 <wavelength>
     <number>5</number>
     <label></label>
+    <exposure units="ms"></exposure>
 </wavelength>
 </p53-Cinema_config>
