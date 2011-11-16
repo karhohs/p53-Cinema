@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <p53-Cinema_config>
 <path_to_metamorph_images>
-
+kjashjjds
 </path_to_metamorph_images>
 <path_to_flatfield_images>
-
+oijsdjdnv
 </path_to_flatfield_images>
-<path_to_
-
-</path_to_
+<path_to_eldorado>
+iwenwfo
+</path_to_eldorado>
 <objective_magnification></objective_magnification>
 <binning></binning>
 <wavelength>
