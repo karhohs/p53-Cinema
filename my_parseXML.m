@@ -1,8 +1,9 @@
-function theStruct = my_parseXML(filename)
-% PARSEXML converts an XML file to a MATLAB structure. Note that for
-% whatever reason the method .getChildNodes() does not work in MATLAB.
+function S = my_parseXML(filename)
+% PARSEXML converts an XML file to a MATLAB structure. This XML parser will
+% only store elements, attributes, text, comments, and CDATA in a struct.
+% Note that indexing the XML object starts at 0, not 1.
 % input: filename = the name of the XML file to be parsed.
-% output: theStruct = the contents of the XML file are converted into a
+% output: S = the contents of the XML file are converted into a
 % struct.
 
 try
@@ -12,18 +13,29 @@ catch err
    error('Failed to read XML file %s.',filename);
 end
 
-
-%Initialize theStruct
+%Initialize S
 current_node = xdoc.getDocumentElement; %Locates the node at the root of the XML tag tree
-my_location = ['theStruct.' current_node.getNodeName]; %The location in theStruct where data is currently being created
-.hasChildNodes
-.hasAttributes
+my_temp_name = regexprep(current_node.getNodeName,'[-:.]','_'); %Struct names cannot contain [-:.]
+my_name = ['S.' my_temp_name]; %The location in S where data is currently being created
+if current_node.hasAttributes
+    my_attributes = current_node.getAttributes;
+    my_length = my_attributes.getLength;
+    for i = 0:(my_length-1)
+        my_temp_string = my_attributes.item(i).toString.toCharArray';
+        my_temp_name = regexp(my_temp_string,'.*(?==)','match');
+        my_temp_name = regexprep(my_temp_name,'[-:.]','_');
+        my_temp_attribute = regexp(my_temp_string,'(?<=").*(?=")','match');
+        eval([my_name '.attd8a.' my_temp_name '=' my_temp_attribute]);
+    end
+end
 
-
+if current_node.hasChildNodes
 .getFirstChild
 .getNextSibling
 .getTextContent %to access text node from parent
 .getData %to access the contents of a text node directly
+end
+
 try
    theStruct = parseNode(xdoc);
 catch err
