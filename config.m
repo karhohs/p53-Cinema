@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<p53-Cinema_config>
+<p53-Cinema_config att1="1" att2="2" att3="hi">
+<!-- This is a configuration file -->
 <path_to_metamorph_images>
 kjashjjds
 </path_to_metamorph_images>
