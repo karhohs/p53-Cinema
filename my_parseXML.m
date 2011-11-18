@@ -35,16 +35,11 @@ end
 
 if root_node.hasChildNodes
     current_node = root_node.getFirstChild;
-    element_names = cell(1,2);
-    element_names{1,1} = ''; %A junk string to initialize the cell
-    element_names{1,2} = 0;
     while ~isempty(current_node)
         switch current_node.getNodeType
             case 1
                 %NodeType 1 = element
-                my_temp_string = current_node.getNodeName.toString.toCharArray';
-                [ind,element_names] = countElement(my_temp_string,element_names);
-                S  = parseElement(current_node,S,ind,my_tree);
+                S  = parseElement(current_node,S,my_tree);
             case [3,4,8]
                 %NodeType 3 = text node
                 %NodeType 4 = CDATA
@@ -72,30 +67,28 @@ for i = 0:(my_length-1)
 end
 end
 
-% ----- Subfunction COUNTELEMENT -----
-function [ind,names] = countElement(str,names)
-
-end
-
 % ----- Subfunction PARSEELEMENT -----
-function S = parseElement(node,S,ind,tree)
+function S = parseElement(node,S,tree)
 %WARNING: This is a recursive function and the author of this code does not
 %know if this could lead to an infinite loop or crashing MATLAB.
 my_temp_name = regexprep(node.getNodeName,'[-:.]','_'); %Struct names cannot contain [-:.]
-tree = [tree '(' ind ').' my_temp_name]; %The location in S where data is currently being created
+if isfield()
+    tree = [tree '.' my_temp_name '(end+1)']; %The location in S where data is currently being created
+else
+        tree = [tree '.' my_temp_name '(1)']; %The location in S where data is currently being created
+end
+
+
 if node.hasAttributes
     S = parseAttributes(node,S,tree);
 end
 if node.hasChildNodes
     current_node = root_node.getFirstChild;
-    
     while ~isempty(current_node)
         switch node.getNodeType
             case 1
                 %NodeType 1 = element
-                my_temp_string = current_node.getNodeName.toString.toCharArray';
-                [ind,element_names] = countElement(my_temp_string,element_names);
-                S  = parseElement(current_node,S,ind,my_tree);
+                S  = parseElement(current_node,S,my_tree);
             case [3,4,8]
                 %NodeType 3 = text node
                 %NodeType 4 = CDATA
