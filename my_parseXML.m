@@ -5,95 +5,119 @@ function S = my_parseXML(filename)
 % input: filename = the name of the XML file to be parsed.
 % output: S = the contents of the XML file are converted into a
 % struct.
+%
+%Note Java Objects in MATLAB do not share the same memory limits as
+%traditional MATLAB variables. Therefore, my_parseXML may choke on files
+%larger than 64MB, the assumed default limit.
 
 try
-   xdoc = xmlread(filename);
+    xdoc = xmlread(filename);
 catch err
-   disp(err.message)
-   error('Failed to read XML file %s.',filename);
+    disp(err.message)
+    error('Failed to read XML file %s.',filename);
 end
 
 %Initialize S
-current_node = xdoc.getDocumentElement; %Locates the node at the root of the XML tag tree
-my_temp_name = regexprep(current_node.getNodeName,'[-:.]','_'); %Struct names cannot contain [-:.]
-my_name = ['S.' my_temp_name]; %The location in S where data is currently being created
-if current_node.hasAttributes
-    my_attributes = current_node.getAttributes;
+root_node = xdoc.getDocumentElement; %Locates the node at the root of the XML tag tree
+my_temp_name = regexprep(root_node.getNodeName,'[-:.]','_'); %Struct names cannot contain [-:.]
+my_tree = ['S.' my_temp_name]; %The location in S where data is currently being created
+if root_node.hasAttributes
+    my_attributes = root_node.getAttributes;
     my_length = my_attributes.getLength;
     for i = 0:(my_length-1)
         my_temp_string = my_attributes.item(i).toString.toCharArray';
         my_temp_name = regexp(my_temp_string,'.*(?==)','match');
         my_temp_name = regexprep(my_temp_name,'[-:.]','_');
         my_temp_attribute = regexp(my_temp_string,'(?<=").*(?=")','match');
-        eval([my_name '.attd8a.' my_temp_name '=' my_temp_attribute]);
+        eval([my_tree '.attd8a.' my_temp_name '=' my_temp_attribute]);
     end
 end
 
-if current_node.hasChildNodes
-.getFirstChild
-.getNextSibling
-.getTextContent %to access text node from parent
-.getData %to access the contents of a text node directly
-end
-
-try
-   theStruct = parseNode(xdoc);
-catch err
-   disp(err.message)
-   error('Unable to parse XML file %s.',filename);
-end
-
-
-% ----- Subfunction PARSECHILDNODES -----
-function children = parseNode(my_node)
-% Recurse over node children.
-children = [];
-if theNode.hasChildNodes
-   childNodes = theNode.getChildNodes;
-   numChildNodes = childNodes.getLength;
-   allocCell = cell(1, numChildNodes);
-
-   children = struct(             ...
-      'Name', allocCell, 'Attributes', allocCell,    ...
-      'Data', allocCell, 'Children', allocCell);
-
-    for count = 1:numChildNodes
-        theChild = childNodes.item(count-1);
-        children(count) = makeStructFromNode(theChild);
+if root_node.hasChildNodes
+    current_node = root_node.getFirstChild;
+    element_names = cell(1,2);
+    element_names{1,1} = ''; %A junk string to initialize the cell
+    element_names{1,2} = 0;
+    while ~isempty(current_node)
+        switch current_node.getNodeType
+            case 1
+                %NodeType 1 = element
+                my_temp_string = current_node.getNodeName.toString.toCharArray';
+                [ind,element_names] = countElement(my_temp_string,element_names);
+                S  = parseElement(current_node,S,ind,my_tree);
+            case [3,4,8]
+                %NodeType 3 = text node
+                %NodeType 4 = CDATA
+                %NodeType 8 = comment node
+                S = parseMiscellaneous(current_node,S,my_tree);
+            otherwise
+        end
+        current_node = current_node.getNextSibling;
     end
+    
+    
 end
-
-% ----- Subfunction MAKESTRUCTFROMNODE -----
-function nodeStruct = makeStructFromNode(theNode)
-% Create structure of node info.
-
-nodeStruct = struct(                        ...
-   'Name', char(theNode.getNodeName),       ...
-   'Attributes', parseAttributes(theNode),  ...
-   'Data', '',                              ...
-   'Children', parseChildNodes(theNode));
-
-if any(strcmp(methods(theNode), 'getData'))
-   nodeStruct.Data = char(theNode.getData); 
-else
-   nodeStruct.Data = '';
 end
 
 % ----- Subfunction PARSEATTRIBUTES -----
-function attributes = parseAttributes(theNode)
-% Create attributes structure.
+function S = parseAttributes(node,S,tree)
+my_attributes = node.getAttributes;
+my_length = my_attributes.getLength;
+for i = 0:(my_length-1)
+    my_temp_string = my_attributes.item(i).toString.toCharArray';
+    my_temp_name = regexp(my_temp_string,'.*(?==)','match');
+    my_temp_name = regexprep(my_temp_name,'[-:.]','_');
+    my_temp_attribute = regexp(my_temp_string,'(?<=").*(?=")','match');
+    eval([tree '.attd8a.' my_temp_name '=''' my_temp_attribute ''';']);
+end
+end
 
-attributes = [];
-if theNode.hasAttributes
-   theAttributes = theNode.getAttributes;
-   numAttributes = theAttributes.getLength;
-   allocCell = cell(1, numAttributes);
-   attributes = struct('Name', allocCell, 'Value', ...
-                       allocCell);
+% ----- Subfunction COUNTELEMENT -----
+function [ind,names] = countElement(str,names)
 
-   for count = 1:numAttributes
-      attrib = theAttributes.item(count-1);
-      attributes(count).Name = char(attrib.getName);
-      attributes(count).Value = char(attrib.getValue);
-   end
+end
+
+% ----- Subfunction PARSEELEMENT -----
+function S = parseElement(node,S,ind,tree)
+%WARNING: This is a recursive function and the author of this code does not
+%know if this could lead to an infinite loop or crashing MATLAB.
+my_temp_name = regexprep(node.getNodeName,'[-:.]','_'); %Struct names cannot contain [-:.]
+tree = [tree '(' ind ').' my_temp_name]; %The location in S where data is currently being created
+if node.hasAttributes
+    S = parseAttributes(node,S,tree);
+end
+if node.hasChildNodes
+    current_node = root_node.getFirstChild;
+    
+    while ~isempty(current_node)
+        switch node.getNodeType
+            case 1
+                %NodeType 1 = element
+                my_temp_string = current_node.getNodeName.toString.toCharArray';
+                [ind,element_names] = countElement(my_temp_string,element_names);
+                S  = parseElement(current_node,S,ind,my_tree);
+            case [3,4,8]
+                %NodeType 3 = text node
+                %NodeType 4 = CDATA
+                %NodeType 8 = comment node
+                S = parseMiscellaneous(current_node,S);
+            otherwise
+        end
+        current_node = current_node.getNextSibling;
+    end
+else
+    my_temp_string = node.getTextContent.toString.toCharArrary';
+    eval([tree '=''' my_temp_string ''';'])
+end
+end
+
+% ----- Subfunction PARSEMISCELLANEOUS -----
+function S = parseMiscellaneous(node,S,tree)
+try
+    my_temp_string = node.getData.toString.toCharArray';
+    eval([tree '.txtd8a{end+1}=''' my_temp_string ''';'])
+catch %#ok<CTCH>
+    my_temp_string = node.getData.toString.toCharArray';
+    eval([tree '.txtd8a{1}=''' my_temp_string ''';'])
+end
 end
