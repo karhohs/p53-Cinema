@@ -1,4 +1,16 @@
 function S = my_parseXML(filename)
+% S = my_parseXML(filename)
+% Input:
+% filename: the name of an XML file. The XML file must be properly formatted to W3 standards. If it is not this function will let you know via the MATLAB function xmlread().
+% 
+% Output:
+% S: a MATLAB struct. The struct is organized in a hierarchical fashion that mimics the hierarchy of an XML document. The first field in S is the document root node. Child nodes in an XML document then become fields of the parent node. Attributes are stored in a `attd8a` field. Text nodes found within a parent are stored in a cell named `txtd8a`. Text nodes that only contain white-space data is omitted from the struct.
+% 
+% Description:
+% As the collection of m-files that constitute p53-Cinema grew there developed a need for a configuration file to store user-defined information. One goal of the configuration file was to isolate user-defined information from the m-files, so that editing the source code was not necessary. Also the need for repeatedly defining the same variables in the MATLAB workspace could be avoided. XML was chosen due to the existence of xmlread() in MATLAB and the pleasing, extensible tree structure of the format. It was immediately clear that storing the XML data in a struct would facilitate access to this information. An original XML parser was written for several reasons: (a) there was no such built-in function in MATLAB and the suggested method (as found in the xmlread() help page) created an overly-complicated struct. (b) the function xml2struct() as found in MATLAB Central was not noticed by the author until halfway through the creation of my_parseXML.m (c) no other solution presented the data in the format the author found most logical.
+% The first job of my_parseXML() is to read user-defined data from a configuration file into a struct. This struct will be a global variable that can be accessed from any function in p53-Cinema.
+% 
+% Other Notes:
 % PARSEXML converts an XML file to a MATLAB structure. This XML parser will
 % only store elements, attributes, text, comments, and CDATA in a struct.
 % Note that indexing the XML object starts at 0, not 1.
