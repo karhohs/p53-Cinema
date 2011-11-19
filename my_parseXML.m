@@ -99,7 +99,10 @@ if node.hasChildNodes
     end
 else
     my_temp_string = node.getTextContent.toString.toCharArray';
-    eval([tree '.txtd8a{1}=''' my_temp_string ''';'])
+    flag = checkString(my_temp_string);
+    if flag
+        eval([tree '.txtd8a{1}=my_temp_string;'])
+    end
 end
 end
 
@@ -109,18 +112,20 @@ my_temp_string = node.getData.toString.toCharArray';
 flag = checkString(my_temp_string);
 if flag
     if eval(['isfield(' tree ',''txtd8a'')'])
-        eval([tree '.txtd8a{end+1}=''' my_temp_string ''';'])
+        eval([tree '.txtd8a{end+1}=my_temp_string;'])
     else
-        eval([tree '.txtd8a{1}=''' my_temp_string ''';'])
+        eval([tree '.txtd8a{1}=my_temp_string;'])
     end
 end
-
 end
 
 % ----- Subfunction CHECKSTRING -----
 function [flag] = checkString(my_str)
 flag = 1;
-if ~isempty(strfind(my_str,sprintf('\n')))
+if strcmp(my_str,sprintf('\n'))
+    flag = 0;
+end
+if isempty(regexp(my_str,'\S','once'))
     flag = 0;
 end
 end
