@@ -120,17 +120,6 @@ for i=1:Wmax
                 %Loading the images is the most time intensive part of the code
                 name2read = [path,'\',FileNames{k,j,1}];
                 IM = imread(name2read);    %loads the tif file
-                %<parsing the tiff file with these commands>
-                %             imfinfo(name2read,'tif');
-                %             t = Tiff(filename,'r');
-                %             t.nextDirectory;
-                %             t.setDirectory;
-                %             t.lastDirectory;
-                %             t.currentDirectory;
-                %             t.writeDirectory;
-                %             t.rewriteDirectory;
-                %             t.getTag('ImageLength');
-                %<
                 p53TiffMetaAnalysis(t)
                 imwrite(IM,Name,'tif','WriteMode','append','Compression','none');
             end
