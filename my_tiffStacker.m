@@ -119,8 +119,9 @@ for i=1:Wmax
                 %appends the image to the tif file using no compression
                 %Loading the images is the most time intensive part of the code
                 name2read = [path,'\',FileNames{k,j,1}];
-                IM = imread(name2read);    %loads the tif file
-                p53TiffMetaAnalysis(t)
+                t = Tiff(name2read,'r');
+                IM = t.read;
+                p53TiffMetaAnalysis(t);
                 imwrite(IM,Name,'tif','WriteMode','append','Compression','none');
             end
         end
