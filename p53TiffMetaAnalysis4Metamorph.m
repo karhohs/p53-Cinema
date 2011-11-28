@@ -1,9 +1,10 @@
 function [time] = p53TiffMetaAnalysis4Metamorph(t)
-% S = my_parseXML(filename)
+% time = p53TiffMetaAnalysis4Metamorph(t)
 % Input:
 % t = a TIFF image object created by "Tiff(filename,'r')".
 % Output:
-%
+% time = the time the image was acquired by the microscope. 'YYYYMMDD
+% 24:60:60.000'
 % Description:
 % The TIFF format can contain useful metadata about the image. When a stack
 % of images is created the metadata from the individual images will be
