@@ -37,7 +37,7 @@ function []=my_tiffStacker(path,positions,timepoints)
 
 cd([path,'\..']);
 path2=pwd;
-
+warning('off','MATLAB:tifflib:libraryWarning');
 % ----- Organizing the filenames -----
 %The filenames are organized within a 3D (i,j,k) matrix where each dimension
 %represents either time, position, or wavelength (i=time, j=position,
@@ -96,8 +96,8 @@ mkdir(path2,'Stacks') %a new directory is generated for the stacks
 %loaded and appendend to a new (multi-layer) tif file named with '_tSTACK'
 
 % ----- Create stacks -----
-timelabels = cell(Tmax,Smax,Wmax); %This cell will contain the times images were acquired
-newnames = cell(Smax,Wmax);
+timelabels = cell(Tmax,1); %This cell will contain the times images were acquired
+newnames = cell(Wmax,Smax);
 for i=1:Wmax
     for j=positions
         for k=timepoints{j}
@@ -113,25 +113,25 @@ for i=1:Wmax
                 %Due to the quirks introduced in the evolution of software through ad hoc
                 %programming it is some times necessary to change the format of the .tif
                 %image filenames created by metamorph.
-                Name_temp = regexprep(FileNames{k,j,1},'\W*',''); %Remove all not(alphabetic, numeric, or underscore) characters
+                Name_temp = regexprep(FileNames{k,j,i},'\W*',''); %Remove all not(alphabetic, numeric, or underscore) characters
                 Name_temp = regexprep(Name_temp,'tocamera','','ignorecase'); %remove 'tocamera' if present b/c it is not informative
                 Name_temp = regexprep(Name_temp,'camera','','ignorecase'); %remove 'camera' if present b/c it is not informative
                 Name_temp = regexprep(Name_temp,'(?<=_t).*','STACK'); %'_t' is always at the end of the filename
                 Name = [path2,'\Stacks\',Name_temp,'.tif']; %generates the name of the stack
                 %appends the image to the tif file using no compression
                 %Loading the images is the most time intensive part of the code
-                name2read = [path,'\',FileNames{k,j,1}];
-                newnames{j,i} = Name;
+                name2read = [path,'\',FileNames{k,j,i}];
+                newnames{i,j} = Name;
                 t = Tiff(name2read,'r');
                 IM = t.read;
-                timelabels{i,j,k} = p53TiffMetaAnalysis4Metamorph(t);
+                timelabels{k} = p53TiffMetaAnalysis4Metamorph(t);
                 t.close;
                 imwrite(IM,Name,'tif','WriteMode','append','Compression','none');
             end
-            t = Tiff(newnames{j,i},'w');
-            addTime2Stack(timelabels{i,j,:},t);
-            t.close;
         end
+         t = Tiff(newnames{i,j},'r+');
+         addTime2Stack(timelabels,t);
+         t.close;
         fprintf(1,'.'); %shows some activity to calm user... (cheap progress bar)
     end
 end
@@ -146,11 +146,12 @@ try
     fid = fopen('t3mp.xml','w');
     fprintf(fid,'%s',metadata);
     fclose(fid);
-    xdoc = xmlread('.t3mp.xml');
+    xdoc = xmlread('t3mp.xml');
     node_root = xdoc.getDocumentElement;
     my_list = node_root.getElementsByTagName('time');
-    aprioritimelabels = my_list.item(0).getTextContent;
-    aprioritimelabels = regexp(aprioritimelabels,'.*(?=,)','match');
+    aprioritimelabels = my_list.item(0).getTextContent.toCharArray';
+    aprioritimelabels = regexp(aprioritimelabels,'((?<=,)[^,]*|[^,]*(?=,))','match');
+    aprioritimelabels = aprioritimelabels';
     timelabels = vertcat(aprioritimelabels,timelabels);
     timestr = timelabels{1};
     for i=2:length(timelabels)
@@ -167,20 +168,22 @@ catch err %#ok<NASGU>
     fid = fopen('t3mp.xml','w');
     fprintf(fid,'<MetaData></MetaData>');
     fclose(fid);
-    xdoc = xmlread('.t3mp.xml');
+    xdoc = xmlread('t3mp.xml');
     node_root = xdoc.getDocumentElement;
     thisElement = xdoc.createElement('time');
     thisElement.setTextContent(timestr);
     node_root.appendChild(thisElement);
-    xmlwrite('t3mp.xml',xdoc);   
+    xmlwrite('t3mp.xml',xdoc);
 end
 %append XML information to image description
 fid = fopen('t3mp.xml');
 F = fread(fid, '*char')';
 fclose(fid);
 t.setTag('ImageDescription',F);
+t.rewriteDirectory;
+delete('t3mp.xml');
 end
 
-
+%----- SUBFUNCTION SCALE12TO16BIT -----
 
 
