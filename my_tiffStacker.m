@@ -1,5 +1,5 @@
-function []=my_tiffStacker(path,positions,timepoints)
-% S = my_parseXML(filename)
+function [] = my_tiffStacker(path,positions,timepoints)
+% [] = my_tiffStacker(path,positions,timepoints)
 % Input:
 % path: a char. The path to the folder that contains the raw TIFF images from
 % imageJ.
