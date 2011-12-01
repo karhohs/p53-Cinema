@@ -90,7 +90,7 @@ elseif isnumeric(timepoints) && min(size(timepoints)) == 1
 elseif min(size(timepoints)) ~= 1 || max(size(timepoints)) ~= Smax
     error('the timepoints cell vector is an invalid size')
 end
-mkdir(path2,'Stacks') %a new directory is generated for the stacks
+mkdir(path2,'p53CinemaSTACKS') %a new directory is generated for the stacks
 
 %for each wave length and position, the tiff files from each time point is
 %loaded and appendend to a new (multi-layer) tif file named with '_tSTACK'
