@@ -117,7 +117,7 @@ for i=1:Wmax
                 Name_temp = regexprep(Name_temp,'tocamera','','ignorecase'); %remove 'tocamera' if present b/c it is not informative
                 Name_temp = regexprep(Name_temp,'camera','','ignorecase'); %remove 'camera' if present b/c it is not informative
                 Name_temp = regexprep(Name_temp,'(?<=_t).*','STACK'); %'_t' is always at the end of the filename
-                Name = [path2,'\Stacks\',Name_temp,'.tif']; %generates the name of the stack
+                Name = [path2,'\p53CinemaSTACKS\',Name_temp,'.tif']; %generates the name of the stack
                 %appends the image to the tif file using no compression
                 %Loading the images is the most time intensive part of the code
                 name2read = [path,'\',FileNames{k,j,i}];
