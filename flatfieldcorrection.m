@@ -105,15 +105,16 @@ for j=1:length(channels_stacks)
     for i=1:length(stacknames)
         temp = regexp(stacknames{i},channels_stacks{j},'match','once');
         if ~isempty(temp)
-            disp(['Flat field correction in ',stacknames{i}])
-            S=readStack([stackpath,'\',stacknames{i}]);
-            for k=1:length(S)
+            disp(['Flatfield correcting ',stacknames{i}])
+            info = imfinfo([stackpath,'\',stacknames{i}],'tif');
+            t = Tiff([stackpath,'\',stacknames{i}],'r');
+            for k=1:directoryLength
                 S{k}=S{k}-offset{j};
                 S{k}(S{k}<0)=0;
                 S{k}=S{k}./gain{j};
             end
             Name = regexprep(stacknames{i},'(?<=_t)(\w*)(?=\.)','$1_ff');
-            newStack(S,Name,ffstackpath);
+            imwrite(IM,Name,'tif','WriteMode','append','Compression','none');
         end
     end
 end
