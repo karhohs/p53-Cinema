@@ -10,16 +10,18 @@ function []=flatfieldcorrection(stackpath,ffpath)
 % [stackpath '_ff'].
 %
 % Description:
-%
+% 
 %
 % Other Notes:
-%
+% It is assumed that the bit depth of the source images are 12-bit.
 if nargin==0
     stackpath = 'C:\Users\Kyle\Documents\p53CinemaSTACKS';
     ffpath='G:\KWKDocuments\My Dropbox\p53Cinema\flatfield_20110909';
 end
 %----- Import stacknames -----
-stacknames=importStackNames(stackpath);
+disp(['working in ', stackpath]); %Sanity Check
+dirCon_stack = dir(stackpath);
+stacknames=importStackNames(dirCon_stack);
 %identify the channels
 expr='(?<=_w\d+).*(?=_s\d+)';
 Temp=cell([1,length(stacknames)]); %Initialize cell array
@@ -76,54 +78,86 @@ for j=1:length(dirCon_ff)
 end
 %create offset and gain images according to the truth table
 for i=1:length(channels_stacks)
-    outcome = channelTruthTable(k,1)*2 + channelTruthTable(k,2);
+    outcome = channelTruthTable(i,1)*2 + channelTruthTable(i,2);
     switch outcome
         case 0 %No offset or gain image
             makeoffset(channels_stacks{i},ffpath);
-            makegain(channels_stacks{i},ffpath);
+            makegain(channels_stacks{i},ffpath,dirCon_ff);
         case 1 %just a gain image
             makeoffset(channels_stacks{i},ffpath);
         case 2 %just an offset image
-            makegain(channels_stacks{i},ffpath);
+            makegain(channels_stacks{i},ffpath,dirCon_ff);
         case 3 %both gain and offset exist
     end
 end
 
 %---- correct stacks using correction images ----
 for j=1:length(channels_stacks)
-    info = imfinfo([ffpath,'\',chan,'_offset'],'tif');
-    offset = double(imread([ffpath,'\',chan,'_offset']),'tif','Info',info);
+    info = imfinfo([ffpath,'\',channels_stacks{j},'_offset'],'tif');
+    offset = double(imread([ffpath,'\',channels_stacks{j},'_offset'],'tif','Info',info));
     for k=1:length(dirCon_ff)
-        temp = regexp(dirCon_ff(j).name,[chan '_gain\d+'],'match','once','ignorecase');
+        temp = regexp(dirCon_ff(k).name,[channels_stacks{j} '_gain\d+'],'match','once','ignorecase');
         if ~isempty(temp)
             gainname = temp;
             break
         end
     end
     info = imfinfo([ffpath,'\',gainname],'tif');
-    gain = double(imread([ffpath,'\',gainname]),'tif','Info',info);
+    gain = double(imread([ffpath,'\',gainname],'tif','Info',info));
+    expr='(?<=_gain)\d+';
+    max_temp=regexp(gainname,expr,'match','once');
+    max_temp=str2double(max_temp)/1000;
+    gain=gain*max_temp/65536;
     for i=1:length(stacknames)
         temp = regexp(stacknames{i},channels_stacks{j},'match','once');
         if ~isempty(temp)
             disp(['Flatfield correcting ',stacknames{i}])
             info = imfinfo([stackpath,'\',stacknames{i}],'tif');
             t = Tiff([stackpath,'\',stacknames{i}],'r');
-            for k=1:directoryLength
-                S{k}=S{k}-offset{j};
-                S{k}(S{k}<0)=0;
-                S{k}=S{k}./gain{j};
-            end
             Name = regexprep(stacknames{i},'(?<=_t)(\w*)(?=\.)','$1_ff');
-            imwrite(IM,Name,'tif','WriteMode','append','Compression','none');
+            if length(info) > 1
+                for k=1:length(info)-1
+                    IM = double(t.read);
+                    IM = IM-offset;
+                    IM(IM<0) = 0;
+                    IM = scale12to16bit(IM);
+                    IM = IM./gain;
+                    IM = uint16(IM);
+                    imwrite(IM,[ffstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
+                    t.nextDirectory;
+                end
+                %one last time without t.nextDirectory
+                IM = double(t.read);
+                IM = IM-offset;
+                IM(IM<0) = 0;
+                IM = scale12to16bit(IM);
+                IM = IM./gain;
+                IM = uint16(IM);
+                imwrite(IM,[ffstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
+            else
+                IM = double(t.read);
+                IM = IM-offset;
+                IM(IM<0) = 0;
+                IM = scale12to16bit(IM);
+                IM = IM./gain;
+                IM = uint16(IM);
+                imwrite(IM,[ffstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
+            end
+            %add image description from old stack to new stack
+            t.setDirectory(1)
+            metadata = t.getTag('ImageDescription');
+            t.close;
+            t = Tiff([ffstackpath,'\',Name],'r+');
+            t.setTag('ImageDescription',metadata);
+            t.rewriteDirectory;
+            t.close;
         end
     end
 end
 end
 
 %----- SUBFUNCTION IMPORTSTACKNAMES -----
-function [Temp] = importStackNames(stackpath)
-dirCon_stack = dir(stackpath);
-disp(['working in ', stackpath]); %Sanity Check
+function [Temp] = importStackNames(dirCon_stack)
 expr='.*_w\d+.*_s\d+.*_t.*\.tif';
 Temp=cell([1,length(dirCon_stack)]); %Initialize cell array
 % ----- Identify the legitimate stacks -----
@@ -191,17 +225,18 @@ end
 
 %----- SUBFUNCTION MAKEOFFSET -----
 function []=makeoffset(chan,ffpath)
+disp(['making offset image for the ' chan ' channel...'])
 info = imfinfo([ffpath,'\',chan,'_0'],'tif');
-IM=double(imread([ffpath,'\',chan,'_0']),'tif','Info',info);
+IM=double(imread([ffpath,'\',chan,'_0'],'tif','Info',info));
 IM=xysmoothen(IM,9);
 IM=floor(IM);
 IM=uint16(IM);
-imwrite(IM,[ffpath,'\',chan,'_offset'],'tif','Compression','none');
+imwrite(IM,[ffpath,'\',chan,'_offset.tif'],'tif','Compression','none');
 end
 
 %----- SUBFUNCTION MAKEGAIN -----
 function []=makegain(chan,ffpath,dirCon_ff)
-disp(['making gain image for the ' chan 'channel...'])
+disp(['making gain image for the ' chan ' channel...'])
 %identify all the exposure images
 Temp=cell([1,length(dirCon_ff)]); %Initialize cell array
 % ----- Identify the legitimate stacks -----
@@ -210,7 +245,7 @@ i=1;
 for j=1:length(dirCon_ff)
     Temp2=regexp(dirCon_ff(j).name,expr,'match','once','ignorecase');
     if Temp2
-        Temp{i}=dirCon_ff(j);
+        Temp{i}=dirCon_ff(j).name;
         i=i+1;
     end
 end
@@ -225,13 +260,17 @@ for i=1:length(Temp)
         ind = i;
     end
     info = imfinfo([ffpath,'\',chan,'_0'],'tif');
-    flatfieldIM{i}=double(imread([ffpath,'\',Temp{i}]),'tif','Info',info);
+    flatfieldIM{i}=double(imread([ffpath,'\',Temp{i}],'tif','Info',info));
 end
 
 %weight the dark image by 5
-flatfieldIM{end+1:end+5} = flatfieldIM{ind};
-exposure(end+1:end+5) = 0;
-
+Temp = zeros(1,5);
+exposure = [exposure Temp];
+Temp = cell(1,5);
+flatfieldIM = [flatfieldIM Temp];
+for i=0:4
+    flatfieldIM{end-i} = flatfieldIM{ind};
+end
 %calculate the gain image
 [hei,wid]=size(flatfieldIM{1});
 gainIM=zeros(size(flatfieldIM{1}));
@@ -253,5 +292,5 @@ max_temp=round(max_temp*1000)/1000;
 im_temp=gainIM*65536/max_temp;
 im_temp=uint16(im_temp);
 max_temp=sprintf('%d',max_temp*1000);
-imwrite(im_temp,[ffpath,'\',chan,'_gain',max_temp],'tif','Compression','none');
+imwrite(im_temp,[ffpath,'\',chan,'_gain',max_temp,'.tif'],'tif','Compression','none');
 end
