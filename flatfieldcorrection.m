@@ -92,6 +92,7 @@ for i=1:length(channels_stacks)
 end
 
 %---- correct stacks using correction images ----
+dirCon_ff = dir(ffpath);
 for j=1:length(channels_stacks)
     info = imfinfo([ffpath,'\',channels_stacks{j},'_offset'],'tif');
     offset = double(imread([ffpath,'\',channels_stacks{j},'_offset'],'tif','Info',info));
