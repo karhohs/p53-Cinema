@@ -28,15 +28,61 @@ function [pks,vly,pksPitch,vlyPitch,sus,susPitch] = p53PeakFinder(signal,time,sa
 [s,t] = scrubData(signal,time);
 %waveinfo('mexh')
 %To locate both peaks, valleys, and their pitch use mexican hat wavelet
-%waveinfo('haar')
+%waveinfo('haar') Try derivativeOfGaussian degree 1 as a substitute
 %To locate singularities and switches use the haar wavelet.
-
 %Baseline removal: Remove the baseline using the discrete wavelet transform
 
 %Find the ridgemap for peak detection using the continuous wavelet
 %transform.
 
+%Choosing the right scales to investigate can be a challenge, because it
+%can feel subjective. One way is to include every integer scale up to the
+%length of the signal, but this is probably too much information. Another
+%is to choose scales on an exponential/log scale, but this might gloss over
+%some important details. I will try some hybrid between the two. Filling in
+%between an exponential scale with uniform spacing. Hopefully this
+%comprimise will deliver detail across several orders of magnitude.
+pow10 = floor(log(length(s))/log(10));
+wavelet_scales = cell(1,pow10);
+for i=1:pow10
+    wavelet_scales{i} = (10^(i-1):10^(i-1):10^i-10^(i-1));
+end
+tic
 
+temp = cwtft(s,'scales',wavelet_scales{1},'wavelet','mexh');
+coeffsft = temp.cfs;
+for i=2:pow10
+   temp = cwtft(s,'scales',wavelet_scales{i},'wavelet','mexh');
+   temp = temp.cfs;
+   coeffsft = [coeffsft;temp];
+end
+coeffsft = real(coeffsft);
+toc
+wavelet_scales = cell2mat(wavelet_scales);
+tic
+coeffs = cwt(s,wavelet_scales,'mexh');
+toc
+
+figure
+imagesc(coeffs)
+%wavelet_xfrm_coefs = cwt(y,wavelet_scales,'haar');
+%wavelet_xfrm_coefs = cwt(y,wavelet_scales,'mexh');
+%s_wave = cwtft(s,'wavelet','mexh');
+%remove padding from signal and wavelet transforms to only analyze the true signal.
+temp = length(s)-length(t);
+if mod(temp,2)
+    %is odd
+    s2 = s(temp/2:end-temp/2-1);
+    coeffsft = coeffsft(:,temp/2:end-temp/2-1);    
+else
+    %is even
+    s2 = s(temp/2:end-temp/2);
+    coeffsft = coeffsft(:,temp/2:end-temp/2);
+end
+figure
+imagesc(coeffsft)
+title('cwtft')
+isequal(s,s2)
 end
 
 function [s,t] = scrubData(signal,time)
@@ -48,21 +94,8 @@ t_diff = diff(time); %find time interval
 temp = median(t_diff)/3; % This equation is a sort of "secret sauce". Practically speaking, images will be taken at fixed intervals, but occassionally there are outlier intervals due to things such as irradiating cells. Therefore the median should filter out outliers and hone in on the typical behavior. Finally, dividing by 3 will increase the density of data points by 3 using interpolation. This helps identify high frequency content. 3 was chosen empirically.
 t = (time(1):temp:time(end)); %time points are equally spaced
 s = spline(time,signal,t); %Interpolate with splines
-% Find the next power of two that greater than 150% the current. Note,
-% MATLAB has a command called nextpow2().
-% signal length.
-temp = length(s)*1.5;
-temp_bool = true;
-i=0;
-while temp_bool
-    fftLen = 2^i;
-    if temp <= fftLen
-        temp_bool = false;
-    else
-        i = i+1;
-    end
-end
-
+% Find the next power of two that greater than 150% the current.
+fftLen= 2^(ceil(log(length(s)*1.5)/log(2)));
 %Extend signal to fill the FFT length, with a slight variation for filling
 %even or odd number of padding
 temp = fftLen-length(s);
@@ -79,8 +112,8 @@ end
 %of influence from the edges will bleed into signal at high scales. To
 %reduce this unwanted edge effect a tukey window is applied to the input
 %signal.
-tukey50=tukeywin(length(s),0.5)';
-s = s.*tukey50;
+tukey33=tukeywin(length(s),0.33)';
+s = s.*tukey33;
 end
 
 function [] = findRidgeMap()
