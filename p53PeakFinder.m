@@ -35,7 +35,7 @@ function [pks,vly,pksPitch,vlyPitch,sus,susPitch] = p53PeakFinder(signal,time,sa
 %Find the ridgemap for peak detection using the continuous wavelet
 %transform.
 
-cwtftUnevenScales
+cwtftUnevenScalesMexh(s);
 %wavelet_xfrm_coefs = cwt(y,wavelet_scales,'haar');
 %wavelet_xfrm_coefs = cwt(y,wavelet_scales,'mexh');
 %s_wave = cwtft(s,'wavelet','mexh');
@@ -324,11 +324,11 @@ close(my_fig)
 ps2pdf('psfile', [filename '.ps'], 'pdffile', [filename '.pdf'], 'gspapersize', 'a4', 'deletepsfile', 1);
 end
 
-function [out] = cwtftUnevenScales(in)
-%For reasons beyond me, the cwtft function will only calculate coefficients
+function [out] = cwtftUnevenScalesMexh(in)
+%The cwtft function will only calculate coefficients
 %for evenly spaced scales. However, this is an inconvenience when trying to
 %look at trends that occur at different scales. To overcome this difficulty
-%this function calls the cwtft function iterative and that assembles the
+%this function calls the cwtft function iteratively and then assembles the
 %data into a struct that mimics the format of the actual cwtft function.
 
 %Choosing the right scales to investigate can be a challenge, because it
@@ -338,13 +338,19 @@ function [out] = cwtftUnevenScales(in)
 %some important details. I will try some hybrid between the two. Filling in
 %between an exponential scale with uniform spacing. Hopefully this
 %comprimise will deliver detail across several orders of magnitude.
-pow10 = floor(log(length(s))/log(10));
-wavelet_scales = cell(1,pow10);
-for i=1:pow10
-    wavelet_scales{i} = (10^(i-1):10^(i-1):10^i-10^(i-1));
-end
-tic
 
+%It was found to be that wavelet coefficients are no longer useful once
+%the wavelet support is half the length of the signal. The Mexican Hat
+%wavelet has a support of 8 at scale 1. Therefore, in order to find out
+%where the "half support is"...
+hs = length(in)/16;
+%Now implement a scale scheme
+pow102 = ceil(log(hs/10)/log(2));
+wavelet_scales = cell(1,pow102);
+for i=1:pow102
+    wavelet_scales{i} = (1:10)*2^(i-1)+10*(2^(i-1)-1);
+end
+wavelet_scales{pow102}(wavelet_scales{pow102}>hs) = [];
 temp = cwtft(s,'scales',wavelet_scales{1},'wavelet','mexh');
 coeffsft = temp.cfs;
 for i=2:pow10
@@ -352,13 +358,41 @@ for i=2:pow10
    temp = temp.cfs;
    coeffsft = [coeffsft;temp];
 end
-coeffsft = real(coeffsft);
-toc
-wavelet_scales = cell2mat(wavelet_scales);
-tic
-coeffs = cwt(s,wavelet_scales,'mexh');
-toc
+end
 
-figure
-imagesc(coeffs)
+function [out] = cwtftUnevenScalesDog1(in)
+%The cwtft function will only calculate coefficients
+%for evenly spaced scales. However, this is an inconvenience when trying to
+%look at trends that occur at different scales. To overcome this difficulty
+%this function calls the cwtft function iteratively and then assembles the
+%data into a struct that mimics the format of the actual cwtft function.
+
+%Choosing the right scales to investigate can be a challenge, because it
+%can feel subjective. One way is to include every integer scale up to the
+%length of the signal, but this is probably too much information. Another
+%is to choose scales on an exponential/log scale, but this might gloss over
+%some important details. I will try some hybrid between the two. Filling in
+%between an exponential scale with uniform spacing. Hopefully this
+%comprimise will deliver detail across several orders of magnitude.
+
+%It was found to be that wavelet coefficients are no longer useful once
+%the wavelet support is half the length of the signal. The Mexican Hat
+%wavelet has a support of 8 at scale 1. Therefore, in order to find out
+%where the "half support is"...
+hs = length(in)/16;
+%Now implement a scale scheme
+pow102 = ceil(log(hs/10)/log(2));
+wavelet_scales = cell(1,pow102);
+for i=1:pow102
+    wavelet_scales{i} = (1:10)*2^(i-1)+10*(2^(i-1)-1);
+end
+wavelet_scales{pow102}(wavelet_scales{pow102}>hs) = [];
+temp = cwtft(a,'wavelet',{'dog',1});
+temp = cwtft(s,'scales',wavelet_scales{1},'wavelet','mexh');
+coeffsft = temp.cfs;
+for i=2:pow10
+   temp = cwtft(s,'scales',wavelet_scales{i},'wavelet','mexh');
+   temp = temp.cfs;
+   coeffsft = [coeffsft;temp];
+end
 end
