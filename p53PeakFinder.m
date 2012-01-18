@@ -23,37 +23,52 @@ function [pks,vly,pksPitch,vlyPitch,sus,susPitch] = p53PeakFinder(signal,time,sa
 %
 %
 % Other Notes:
-%
+% waveinfo('mexh')
+% To locate both peaks, valleys, and their pitch use mexican hat wavelet
+% waveinfo('gaus') derivativeOfGaussian degree 1
+% To locate singularities and switches use the derivativeOfGaussian degree 1 wavelet.
 
 [s,t] = scrubData(signal,time);
-%waveinfo('mexh')
-%To locate both peaks, valleys, and their pitch use mexican hat wavelet
-%waveinfo('haar') Try derivativeOfGaussian degree 1 as a substitute
-%To locate singularities and switches use the haar wavelet.
 %Baseline removal: Remove the baseline using the discrete wavelet transform
 
 %Find the ridgemap for peak detection using the continuous wavelet
 %transform.
+wavMexh = cwtftUnevenScalesMexh(s);
+wavDog1 = cwtftUnevenScalesDog1(s);
 
-cwtftUnevenScalesMexh(s);
-%wavelet_xfrm_coefs = cwt(y,wavelet_scales,'haar');
-%wavelet_xfrm_coefs = cwt(y,wavelet_scales,'mexh');
-%s_wave = cwtft(s,'wavelet','mexh');
 %remove padding from signal and wavelet transforms to only analyze the true signal.
 temp = length(s)-length(t);
 if mod(temp,2)
     %is odd
-    s2 = s(temp/2:end-temp/2-1);
-    coeffsft = coeffsft(:,temp/2:end-temp/2-1);    
+    temp=temp-1;
+    s = s(temp/2:end-temp/2-1);
+    wavMexh.cfs = wavMexh.cfs(:,temp/2:end-temp/2-1);
+    wavDog1.cfs = wavDog1.cfs(:,temp/2:end-temp/2-1);
 else
     %is even
-    s2 = s(temp/2:end-temp/2);
-    coeffsft = coeffsft(:,temp/2:end-temp/2);
+    s = s(temp/2:end-temp/2);
+    wavMexh.cfs = wavMexh.cfs(:,temp/2:end-temp/2);
+    wavDog1.cfs = wavDog1.cfs(:,temp/2:end-temp/2);
+end
+
+figure
+imagesc(wavMexh.cfs)
+title('Mexh')
+figure
+imagesc(wavDog1.cfs)
+title('Dog1')
+for i=1:size(wavMexh.cfs,1)
+    wavMexh.cfs(i,:)=wavMexh.cfs(i,:)/(2*sqrt(wavMexh.scl(i)));
 end
 figure
-imagesc(coeffsft)
-title('cwtft')
-isequal(s,s2)
+imagesc(wavMexh.cfs)
+title('Mexh Normalized')
+temp=wavMexh.cfs;
+temp(temp<0)=0;
+figure
+contour(temp)
+figure
+plot(s)
 end
 
 function [s,t] = scrubData(signal,time)
@@ -325,11 +340,21 @@ ps2pdf('psfile', [filename '.ps'], 'pdffile', [filename '.pdf'], 'gspapersize', 
 end
 
 function [out] = cwtftUnevenScalesMexh(in)
+%Input:
+%in: the 1D time-domain signal
+%
+%Output:
+%out: a struct with the wavelet transformation.
+%out.cfs = wavelet coefficients in a matrix
+%out.scl = the scales of the wavelet
+%out.phz = the pseudofrequencies of the wavelet scales
+%
+%Description:
 %The cwtft function will only calculate coefficients
 %for evenly spaced scales. However, this is an inconvenience when trying to
 %look at trends that occur at different scales. To overcome this difficulty
 %this function calls the cwtft function iteratively and then assembles the
-%data into a struct that mimics the format of the actual cwtft function.
+%data into a struct that contains the coefficients and scales.
 
 %Choosing the right scales to investigate can be a challenge, because it
 %can feel subjective. One way is to include every integer scale up to the
@@ -340,59 +365,79 @@ function [out] = cwtftUnevenScalesMexh(in)
 %comprimise will deliver detail across several orders of magnitude.
 
 %It was found to be that wavelet coefficients are no longer useful once
-%the wavelet support is half the length of the signal. The Mexican Hat
-%wavelet has a support of 8 at scale 1. Therefore, in order to find out
-%where the "half support is"...
+%the wavelet support is approx. half the length of the signal. The Mexican
+%Hat wavelet has a support of 8 (or is it 11? check waveinfo('mexh')) at
+%scale 1. Therefore, in order to find out where the "half support is"...
+if length(in)<=32
+    warning('wavylsis:tooshort', 'The length of the input signal may be too short for wavelet analysis');
+end
 hs = length(in)/16;
 %Now implement a scale scheme
 pow102 = ceil(log(hs/10)/log(2));
-wavelet_scales = cell(1,pow102);
-for i=1:pow102
-    wavelet_scales{i} = (1:10)*2^(i-1)+10*(2^(i-1)-1);
+if pow102<2
+    wavelet_scales{1} = (1:10);
+    wavelet_scales{pow102}(wavelet_scales{pow102}>hs) = [];
+    temp = cwtft(in,'scales',wavelet_scales{1},'wavelet','mexh');
+    out.cfs = temp.cfs;
+    out.scl = wavelet_scales{1};
+    out.phz = wavelet_scales{1}*0.25; %0.25 is the pseudofrequency of the mexh for scale 1
+else
+    wavelet_scales = cell(1,pow102);
+    for i=1:pow102
+        wavelet_scales{i} = (1:10)*2^(i-1)+10*(2^(i-1)-1);
+    end
+    wavelet_scales{pow102}(wavelet_scales{pow102}>hs) = [];
+    temp = cwtft(in,'scales',wavelet_scales{1},'wavelet','mexh');
+    out.cfs = temp.cfs;
+    for i=2:pow102
+        temp = cwtft(in,'scales',wavelet_scales{i},'wavelet','mexh');
+        temp = temp.cfs;
+        out.cfs = [out.cfs;temp];
+    end
+    
+    out.scl = cell2mat(wavelet_scales);
+    out.phz = out.scl*0.25; %0.25 is the pseudofrequency of the mexh for scale 1
 end
-wavelet_scales{pow102}(wavelet_scales{pow102}>hs) = [];
-temp = cwtft(s,'scales',wavelet_scales{1},'wavelet','mexh');
-coeffsft = temp.cfs;
-for i=2:pow10
-   temp = cwtft(s,'scales',wavelet_scales{i},'wavelet','mexh');
-   temp = temp.cfs;
-   coeffsft = [coeffsft;temp];
-end
+out.cfs = real(out.cfs);
 end
 
 function [out] = cwtftUnevenScalesDog1(in)
-%The cwtft function will only calculate coefficients
-%for evenly spaced scales. However, this is an inconvenience when trying to
-%look at trends that occur at different scales. To overcome this difficulty
-%this function calls the cwtft function iteratively and then assembles the
-%data into a struct that mimics the format of the actual cwtft function.
-
-%Choosing the right scales to investigate can be a challenge, because it
-%can feel subjective. One way is to include every integer scale up to the
-%length of the signal, but this is probably too much information. Another
-%is to choose scales on an exponential/log scale, but this might gloss over
-%some important details. I will try some hybrid between the two. Filling in
-%between an exponential scale with uniform spacing. Hopefully this
-%comprimise will deliver detail across several orders of magnitude.
-
-%It was found to be that wavelet coefficients are no longer useful once
-%the wavelet support is half the length of the signal. The Mexican Hat
-%wavelet has a support of 8 at scale 1. Therefore, in order to find out
-%where the "half support is"...
+%Input:
+%in: the 1D time-domain signal
+%
+%Output:
+%out: a struct with the wavelet transformation.
+%out.cfs = wavelet coefficients in a matrix
+%out.scl = the scales of the wavelet
+%out.hz = the pseudofrequencies of the wavelet scales
+if length(in)<=32
+    warning('wavylsis:tooshort', 'The length of the input signal may be too short for wavelet analysis');
+end
 hs = length(in)/16;
 %Now implement a scale scheme
 pow102 = ceil(log(hs/10)/log(2));
-wavelet_scales = cell(1,pow102);
-for i=1:pow102
-    wavelet_scales{i} = (1:10)*2^(i-1)+10*(2^(i-1)-1);
+if pow102<2
+    wavelet_scales{1} = (1:10);
+    wavelet_scales{pow102}(wavelet_scales{pow102}>hs) = [];
+    temp = cwtft(in,'scales',wavelet_scales{1},'wavelet',{'dog',1});
+    out.cfs = temp.cfs;
+    out.scl = wavelet_scales{1};
+    out.phz = wavelet_scales{1}*0.2; %0.2 is the pseudofrequency of the dog1 for scale 1
+else
+    wavelet_scales = cell(1,pow102);
+    for i=1:pow102
+        wavelet_scales{i} = (1:10)*2^(i-1)+10*(2^(i-1)-1);
+    end
+    wavelet_scales{pow102}(wavelet_scales{pow102}>hs) = [];
+    temp = cwtft(in,'scales',wavelet_scales{1},'wavelet',{'dog',1});
+    out.cfs = temp.cfs;
+    for i=2:pow102
+        temp = cwtft(in,'scales',wavelet_scales{i},'wavelet',{'dog',1});
+        temp = temp.cfs;
+        out.cfs = [out.cfs;temp];
+    end
+    out.scl = cell2mat(wavelet_scales);
+    out.phz = out.scl*0.2; %0.2 is the pseudofrequency of the dog1 for scale 1
 end
-wavelet_scales{pow102}(wavelet_scales{pow102}>hs) = [];
-temp = cwtft(a,'wavelet',{'dog',1});
-temp = cwtft(s,'scales',wavelet_scales{1},'wavelet','mexh');
-coeffsft = temp.cfs;
-for i=2:pow10
-   temp = cwtft(s,'scales',wavelet_scales{i},'wavelet','mexh');
-   temp = temp.cfs;
-   coeffsft = [coeffsft;temp];
-end
+out.cfs = real(out.cfs);
 end
