@@ -28,47 +28,33 @@ function [pks,vly,pksPitch,vlyPitch,sus,susPitch] = p53PeakFinder(signal,time,sa
 % waveinfo('gaus') derivativeOfGaussian degree 1
 % To locate singularities and switches use the derivativeOfGaussian degree 1 wavelet.
 
-[s,t] = scrubData(signal,time);
+[s2,t] = scrubData(signal,time);
 %Baseline removal: Remove the baseline using the discrete wavelet transform
+%try imopen(x,strel('disk',w))
 
-%Find the ridgemap for peak detection using the continuous wavelet
-%transform.
-wavMexh = cwtftUnevenScalesMexh(s);
-wavDog1 = cwtftUnevenScalesDog1(s);
+%Find the de-scaled continous wavelet transform. De-scaled refers to
+%undoing the scaling done to ensure energy preservation.
+wavMexh = cwtftNonuniformScalesMexh(s2);
+wavDog1 = cwtftNonuniformScalesDog1(s2);
 
 %remove padding from signal and wavelet transforms to only analyze the true signal.
-temp = length(s)-length(t);
+temp = length(s2)-length(t);
 if mod(temp,2)
     %is odd
     temp=temp-1;
-    s = s(temp/2:end-temp/2-1);
-    wavMexh.cfs = wavMexh.cfs(:,temp/2:end-temp/2-1);
-    wavDog1.cfs = wavDog1.cfs(:,temp/2:end-temp/2-1);
+    s = s2(temp/2+1:end-temp/2-1);
+    wavMexh.cfs = wavMexh.cfs(:,temp/2+1:end-temp/2-1);
+    wavDog1.cfs = wavDog1.cfs(:,temp/2+1:end-temp/2-1);
 else
     %is even
-    s = s(temp/2:end-temp/2);
-    wavMexh.cfs = wavMexh.cfs(:,temp/2:end-temp/2);
-    wavDog1.cfs = wavDog1.cfs(:,temp/2:end-temp/2);
+    s = s2(temp/2+1:end-temp/2);
+    wavMexh.cfs = wavMexh.cfs(:,temp/2+1:end-temp/2);
+    wavDog1.cfs = wavDog1.cfs(:,temp/2+1:end-temp/2);
 end
 
-figure
-imagesc(wavMexh.cfs)
-title('Mexh')
-figure
-imagesc(wavDog1.cfs)
-title('Dog1')
-for i=1:size(wavMexh.cfs,1)
-    wavMexh.cfs(i,:)=wavMexh.cfs(i,:)/(2*sqrt(wavMexh.scl(i)));
-end
-figure
-imagesc(wavMexh.cfs)
-title('Mexh Normalized')
-temp=wavMexh.cfs;
-temp(temp<0)=0;
-figure
-contour(temp)
-figure
-plot(s)
+%Find the ridgemap for peak detection using the continuous wavelet
+%transform.
+x = findRidgeMap(wavMexh.cfs)
 end
 
 function [s,t] = scrubData(signal,time)
@@ -102,7 +88,15 @@ tukey33=tukeywin(length(s),0.33)';
 s = s.*tukey33;
 end
 
-function [] = findRidgeMap()
+function [out] = findRidgeMap(in)
+%Input:
+%in: a heatmap of the continous wavelet transform coefficients
+%
+%Output:
+%out: a cell array with ridges within each cell. Each ridge is a 2xn vector
+%where n is the length the the ridge. The first row of the vector contains
+%the scale component and the second row contains the time component.
+
 %-- Step 1: Perform Continuous Wavelet Transform --
 %note: input signal 'y' must be evenly spaced
 wavelet_scales = [1,3,5,7,(9:floor(length(y)/10):length(y))];
@@ -339,7 +333,7 @@ close(my_fig)
 ps2pdf('psfile', [filename '.ps'], 'pdffile', [filename '.pdf'], 'gspapersize', 'a4', 'deletepsfile', 1);
 end
 
-function [out] = cwtftUnevenScalesMexh(in)
+function [out] = cwtftNonuniformScalesMexh(in)
 %Input:
 %in: the 1D time-domain signal
 %
@@ -399,9 +393,12 @@ else
     out.phz = out.scl*0.25; %0.25 is the pseudofrequency of the mexh for scale 1
 end
 out.cfs = real(out.cfs);
+for i = 1:length(out.scl)
+    out.cfs(i,:) = out.cfs(i,:)/sqrt(out.scl(i));
+end
 end
 
-function [out] = cwtftUnevenScalesDog1(in)
+function [out] = cwtftNonuniformScalesDog1(in)
 %Input:
 %in: the 1D time-domain signal
 %
@@ -440,4 +437,7 @@ else
     out.phz = out.scl*0.2; %0.2 is the pseudofrequency of the dog1 for scale 1
 end
 out.cfs = real(out.cfs);
+for i = 1:length(out.scl)
+    out.cfs(i,:) = out.cfs(i,:)/sqrt(out.scl(i));
+end
 end
