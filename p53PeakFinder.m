@@ -1,4 +1,4 @@
-function [pks,vly,pksPitch,vlyPitch,sus,susPitch] = p53PeakFinder(signal,time,samplingFreq)
+function [pks,vly,sus,ft,maps] = p53PeakFinder(signal,time,samplingFreq)
 % Input:
 % signal: presumabley a vector of time varying fluorescent protein data
 % time: the times at which measurements were taken
@@ -18,6 +18,12 @@ function [pks,vly,pksPitch,vlyPitch,sus,susPitch] = p53PeakFinder(signal,time,sa
 % susPitch: This measure should give a sense of how long sustained
 % expression lasts as a measure of time. Sustained expression can be
 % thought of as very long plateaued pulses.
+% ft: the fourier transform of the signal
+% maps: A collection of 2D matrices
+% maps.mexh.ridg
+% maps.mexh.cwtcfs
+% maps.dog1.ridg
+% maps.dog1.cwtcfs
 %
 % Description:
 %
@@ -54,8 +60,13 @@ end
 
 %Find the ridgemap for peak detection using the continuous wavelet
 %transform.
-x = findRidgeMap(wavMexh);
-findRidgePeaks(in);
+ridg = findRidgeMap(wavMexh);
+%opportunity here to prune ridges by length
+protopks = processRidgeMap(ridg);
+%The peaks of every ridge represent a candidate peak from the original
+%waveform. The ridge peak contains both positional and scale information.
+%Selective criteria based upon the scale can be used to sift through noise
+%and get a sense for the breadth of each peak.
 end
 
 function [s,t] = scrubData(signal,time)
@@ -64,6 +75,11 @@ function [s,t] = scrubData(signal,time)
 %spaced in time, and to fill in time points to a power of 2 to make use of
 %the FFT for wavelet transformation.
 t_diff = diff(time); %find time interval
+%The "secret sauce" equation below can be tuned by changing the divisor.
+%Empirically 3 seems to be fine for pulses and is recommended as a minimum.
+%However, increasing this value increases the wavelet sensitivity to noise.
+%Setting this value to 6 yields more ridges in the noise range. This is
+%assuming the rate of p53 sampling is between 15 and 30 minutes.
 temp = median(t_diff)/3; % This equation is a sort of "secret sauce". Practically speaking, images will be taken at fixed intervals, but occassionally there are outlier intervals due to things such as irradiating cells. Therefore the median should filter out outliers and hone in on the typical behavior. Finally, dividing by 3 will increase the density of data points by 3 using interpolation. This helps identify high frequency content. 3 was chosen empirically.
 t = (time(1):temp:time(end)); %time points are equally spaced
 s = spline(time,signal,t); %Interpolate with splines
@@ -102,6 +118,7 @@ function [out] = findRidgeMap(in)
 %out.t: a cell array the size of out.xy, but in each cell is a 1xN
 %vector where N is the length of the ridge. The vector contains the time
 %of the ridge.
+%out.map: the ridge map, which is the same size of the wavelet transform
 wavelet_peaks = cell(size(in.cfs,1),1);
 for i=1:size(in.cfs,1)
     wavelet_peaks{i} = first_pass_peak_detection(...
@@ -172,38 +189,32 @@ for i=size(in.cfs,1):-1:(gap_limit+1)
         end
     end
 end
-
-
-
+out.map = beautifyRidgeMap(ridge_map,in.cfs); %just for show
+[out.scl,out.cfs,out.t]=deal(cell(1,ridge_counter));
+for i=1:ridge_counter
+    for j=1:length(wavelet_peaks_alias)
+        temp = (wavelet_peaks_alias{j} == i);
+        if any(temp)
+            if isempty(out.scl{i})
+                out.scl{i}(1) = in.scl(j);
+                out.t{i}(1) = wavelet_peaks{j}(temp);
+                out.cfs{i}(1) = in.cfs(j,out.t{i}(1));
+            else
+                out.scl{i}(end+1)=in.scl(j);
+                out.t{i}(end+1) = wavelet_peaks{j}(temp);
+                out.cfs{i}(end+1) = in.cfs(j,out.t{i}(end));
+            end
+        end
+    end
+end
 end
 
-%The peaks of every ridge represent a candidate peak from the original
-%waveform. The ridge peak contains both positional and scale information.
-%Selective criteria based upon the scale can be used to sift through noise
-%and get a sense for the breadth of each peak.
-% peaks=ridge_peaks(:,1); %3 is chosen heursitically as the noise floor.
-% peaks=peaks(ridge_peaks(:,2)>3);
-
-%Choose peaks that are on a scale that best picks up p53 pulses
-peaks_p53_pulses=find(ridge_map(5,:)~=0);
-peaks=peaks_p53_pulses;
-end
-
-function [peak_index]=first_pass_peak_detection(x,window_size)
+function [out]=first_pass_peak_detection(x,winw_size)
 %There are many ways to find peaks. The wavelet method is powerful at
 %detecting peaks but is actually dependent on simpler peak detection
-%methods. A simple approach that is itself effective is to identify
-%candidate peaks and then weed out unwanted peaks through thresholds or
-%selective criteria.
-%Step 1: Indentify candidate peaks.
-%Method 1: Use the watershed algorithm. If the signal is sufficiently
-%smooth this approach is awesome.
-a=2;
-if a == 1
-    peak_index = watershed(x);
-    peak_index = find(~peak_index);
-else
-    %Method 2: Scan a signal with a window. Find the max. If the max is greater
+%methods. 
+
+    %Simple Peak Finding Method: Scan a signal with a window. Find the max. If the max is greater
     %than the left and right endpoints of the window it is a peak candidate.
     %The window is centered at each point of a waveform, so a wider peak
     %candidate will recieve more votes in a sense. If a window has more than
@@ -211,15 +222,7 @@ else
     %to this method is that it is sensitive to the size of the window. However,
     %this seeming limitation is actually put to use in the wavelet method by
     %scaling the window along with the wavelet.
-    peak_index = window_peak_finder(window_size,x);
-end
-
-%Weed out unqualified peaks and peaks of questionable nature.
-
-end
-
-function [out]=window_peak_finder(winw_size,x)
-length_x = length(x);
+    length_x = length(x);
 if size(x,2) == 1
     x=x';
 end
@@ -248,14 +251,23 @@ for i=length(peak_candidates):-1:1
         peak_elected(i) = [];
     end
 end
-%If a peak has a negative wavelet coefficient value it is disqualified.
+%If a peak has a negative wavelet coefficient value it is disqualified and
+%if a peak is the first or last point of data it is disqualified.
 for i=length(peak_elected):-1:1
     if x(peak_elected(i))<0
+        peak_elected(i) = [];
+    elseif peak_elected(i) == 1
+        peak_elected(i) = [];
+    elseif peak_elected(i) == length_x
         peak_elected(i) = [];
     end
 end
 
 out = peak_elected;
+
+%Weed out unqualified peaks and peaks of questionable nature. If has not
+%already been done.
+
 end
 
 function [my_fig]=plot_peaks(peak_index,x)
@@ -426,22 +438,53 @@ for i = 1:length(out.scl)
 end
 end
 
-function [] = findRidgePeaks(in)
-%Find the peaks of every ridge
-ridge_peaks=zeros(ridge_counter,2);
-%weighted_ridge_peaks=zeros(ridge_counter,2);
-for i=1:ridge_counter
-    temp_map=ridge_map==i;
-    temp_map2=wavelet_xfrm_coefs-min(min(wavelet_xfrm_coefs));
-    temp_map2(~temp_map)=0;
-    [temp_max_vector,ind_vector]=max(temp_map2);
-    [~,ind]=max(temp_max_vector);
-    ridge_peaks(i,:)=[ind,ind_vector(ind)];
-    
-    %    temp_map=ridge_map==i;
-    %    temp_map2=weighted_wavelet_xfrm_coefs;
-    %    temp_map2(~temp_map)=0;
-    %    [temp_max_vector,ind_vector]=max(temp_map2);
-    %    [~,ind]=max(temp_max_vector);
-    %    weighted_ridge_peaks(i,:)=[ind,ind_vector(ind)];
+function [out] = processRidgeMap(in)
+%Input:
+%in: the output, ridges, from findRidgeMap();
+%
+%Output:
+%out: a struct with the peaks of the signal as determined by ridge analysis
+%out.time = the time of a peak
+%out.scale = the scale of that same peak
+%out.waveletcfs = the wavelet coefficient at at that time and scale.
+
+%pre-allocate struct that will contain peak information (assuming not more
+%than 1000 peaks)
+out(1000).time = [];
+out(1000).scale = [];
+out(1000).waveletcfs = [];
+
+%Find the peak(s) of every ridge
+ind = 1;
+for i=1:length(in.cfs)
+    %These next two lines of code represent an easy to implement solution
+    %for finding peaks in 1D signals. This works especially well when the
+    %signal is very smooth. The ridges should be very smooth given enough
+    %scale density/coverage.
+    peak_index = watershed(in.cfs{i});
+    peak_index = find(~peak_index);
+    if ~isempty(peak_index)
+    for j=1:length(peak_index)
+        out(ind).time = in.t{i}(peak_index(j));
+        out(ind).scale = in.scl{i}(peak_index(j));
+        out(ind).waveletcfs = in.cfs{i}(peak_index(j));
+        ind = ind+1;
+    end
+    end
+end
+out(ind:end)=[]; %remove empty pre-allocated space from struct
+end
+
+function [out] = beautifyRidgeMap(ridgmap,cfsmap)
+%create the "white jet" colormap. It is the jet colormap, but the highest
+%value
+oreojet = [0,0,0;0,0,0.53125;0,0,0.546875;0,0,0.5625;0,0,0.578125;0,0,0.59375;0,0,0.609375;0,0,0.625;0,0,0.640625;0,0,0.65625;0,0,0.671875;0,0,0.6875;0,0,0.703125;0,0,0.71875;0,0,0.734375;0,0,0.75;0,0,0.765625;0,0,0.78125;0,0,0.796875;0,0,0.8125;0,0,0.828125;0,0,0.84375;0,0,0.859375;0,0,0.875;0,0,0.890625;0,0,0.90625;0,0,0.921875;0,0,0.9375;0,0,0.953125;0,0,0.96875;0,0,0.984375;0,0,1;0,0.015625,1;0,0.03125,1;0,0.046875,1;0,0.0625,1;0,0.078125,1;0,0.09375,1;0,0.109375,1;0,0.125,1;0,0.140625,1;0,0.15625,1;0,0.171875,1;0,0.1875,1;0,0.203125,1;0,0.21875,1;0,0.234375,1;0,0.25,1;0,0.265625,1;0,0.28125,1;0,0.296875,1;0,0.3125,1;0,0.328125,1;0,0.34375,1;0,0.359375,1;0,0.375,1;0,0.390625,1;0,0.40625,1;0,0.421875,1;0,0.4375,1;0,0.453125,1;0,0.46875,1;0,0.484375,1;0,0.5,1;0,0.515625,1;0,0.53125,1;0,0.546875,1;0,0.5625,1;0,0.578125,1;0,0.59375,1;0,0.609375,1;0,0.625,1;0,0.640625,1;0,0.65625,1;0,0.671875,1;0,0.6875,1;0,0.703125,1;0,0.71875,1;0,0.734375,1;0,0.75,1;0,0.765625,1;0,0.78125,1;0,0.796875,1;0,0.8125,1;0,0.828125,1;0,0.84375,1;0,0.859375,1;0,0.875,1;0,0.890625,1;0,0.90625,1;0,0.921875,1;0,0.9375,1;0,0.953125,1;0,0.96875,1;0,0.984375,1;0,1,1;0.015625,1,0.984375;0.03125,1,0.96875;0.046875,1,0.953125;0.0625,1,0.9375;0.078125,1,0.921875;0.09375,1,0.90625;0.109375,1,0.890625;0.125,1,0.875;0.140625,1,0.859375;0.15625,1,0.84375;0.171875,1,0.828125;0.1875,1,0.8125;0.203125,1,0.796875;0.21875,1,0.78125;0.234375,1,0.765625;0.25,1,0.75;0.265625,1,0.734375;0.28125,1,0.71875;0.296875,1,0.703125;0.3125,1,0.6875;0.328125,1,0.671875;0.34375,1,0.65625;0.359375,1,0.640625;0.375,1,0.625;0.390625,1,0.609375;0.40625,1,0.59375;0.421875,1,0.578125;0.4375,1,0.5625;0.453125,1,0.546875;0.46875,1,0.53125;0.484375,1,0.515625;0.5,1,0.5;0.515625,1,0.484375;0.53125,1,0.46875;0.546875,1,0.453125;0.5625,1,0.4375;0.578125,1,0.421875;0.59375,1,0.40625;0.609375,1,0.390625;0.625,1,0.375;0.640625,1,0.359375;0.65625,1,0.34375;0.671875,1,0.328125;0.6875,1,0.3125;0.703125,1,0.296875;0.71875,1,0.28125;0.734375,1,0.265625;0.75,1,0.25;0.765625,1,0.234375;0.78125,1,0.21875;0.796875,1,0.203125;0.8125,1,0.1875;0.828125,1,0.171875;0.84375,1,0.15625;0.859375,1,0.140625;0.875,1,0.125;0.890625,1,0.109375;0.90625,1,0.09375;0.921875,1,0.078125;0.9375,1,0.0625;0.953125,1,0.046875;0.96875,1,0.03125;0.984375,1,0.015625;1,1,0;1,0.984375,0;1,0.96875,0;1,0.953125,0;1,0.9375,0;1,0.921875,0;1,0.90625,0;1,0.890625,0;1,0.875,0;1,0.859375,0;1,0.84375,0;1,0.828125,0;1,0.8125,0;1,0.796875,0;1,0.78125,0;1,0.765625,0;1,0.75,0;1,0.734375,0;1,0.71875,0;1,0.703125,0;1,0.6875,0;1,0.671875,0;1,0.65625,0;1,0.640625,0;1,0.625,0;1,0.609375,0;1,0.59375,0;1,0.578125,0;1,0.5625,0;1,0.546875,0;1,0.53125,0;1,0.515625,0;1,0.5,0;1,0.484375,0;1,0.46875,0;1,0.453125,0;1,0.4375,0;1,0.421875,0;1,0.40625,0;1,0.390625,0;1,0.375,0;1,0.359375,0;1,0.34375,0;1,0.328125,0;1,0.3125,0;1,0.296875,0;1,0.28125,0;1,0.265625,0;1,0.25,0;1,0.234375,0;1,0.21875,0;1,0.203125,0;1,0.1875,0;1,0.171875,0;1,0.15625,0;1,0.140625,0;1,0.125,0;1,0.109375,0;1,0.09375,0;1,0.078125,0;1,0.0625,0;1,0.046875,0;1,0.03125,0;1,0.015625,0;1,0,0;0.984375,0,0;0.96875,0,0;0.953125,0,0;0.9375,0,0;0.921875,0,0;0.90625,0,0;0.890625,0,0;0.875,0,0;0.859375,0,0;0.84375,0,0;0.828125,0,0;0.8125,0,0;0.796875,0,0;0.78125,0,0;0.765625,0,0;0.75,0,0;0.734375,0,0;0.71875,0,0;0.703125,0,0;0.6875,0,0;0.671875,0,0;0.65625,0,0;0.640625,0,0;0.625,0,0;0.609375,0,0;0.59375,0,0;0.578125,0,0;0.5625,0,0;0.546875,0,0;0.53125,0,0;0.515625,0,0;1,1,1];
+ridgmap(ridgmap>0)=1;
+cfsmap_min = min(min(cfsmap));
+cfsmap = (cfsmap - cfsmap_min)*253/(max(max(cfsmap))-cfsmap_min)+1;
+out = cfsmap;
+out(ridgmap==1) = 255;
+figure
+colormap(oreojet)
+imagesc(out)
 end
