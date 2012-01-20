@@ -54,7 +54,7 @@ end
 
 %Find the ridgemap for peak detection using the continuous wavelet
 %transform.
-x = findRidgeMap(wavMexh.cfs)
+x = findRidgeMap(wavMexh)
 end
 
 function [s,t] = scrubData(signal,time)
@@ -90,25 +90,19 @@ end
 
 function [out] = findRidgeMap(in)
 %Input:
-%in: a heatmap of the continous wavelet transform coefficients
+%in: the CWT structure from the custom cwtft function in this file
 %
 %Output:
 %out: a cell array with ridges within each cell. Each ridge is a 2xn vector
 %where n is the length the the ridge. The first row of the vector contains
 %the scale component and the second row contains the time component.
-
-%-- Step 1: Perform Continuous Wavelet Transform --
-%note: input signal 'y' must be evenly spaced
-wavelet_scales = [1,3,5,7,(9:floor(length(y)/10):length(y))];
-%wavelet_xfrm_coefs = cwt(y,wavelet_scales,'haar');
-wavelet_xfrm_coefs = cwt(y,wavelet_scales,'mexh');
-wavelet_peaks = cell(size(wavelet_xfrm_coefs,1),1);
-for i=1:size(wavelet_xfrm_coefs,1)
+wavelet_peaks = cell(size(in.cfs,1),1);
+for i=1:size(in.cfs,1)
     wavelet_peaks{i} = first_pass_peak_detection(...
-        wavelet_xfrm_coefs(i,:),wavelet_scales(i)*2+1); %The window size was heursitically chosen to be (2*current_scale+1)
+        in.cfs(i,:),in.scl(i)*2+1); %The window size was heursitically chosen to be (2*current_scale+1)
 end
 %-- Identify the Ridges --
-ridge_map = zeros(size(wavelet_xfrm_coefs));
+ridge_map = zeros(size(in.cfs));
 wavelet_peaks_alias = cell(size(wavelet_peaks));
 gap_limit = 2;
 
@@ -121,13 +115,12 @@ for i=1:length(wavelet_peaks{end})
     wavelet_peaks_alias{end}(i) = i;
 end
 ridge_counter = length(wavelet_peaks{end}); %keeps track of the total number of ridges
-for i=size(wavelet_xfrm_coefs,1):-1:(gap_limit+1)
-    
+for i=size(in.cfs,1):-1:(gap_limit+1)
     for j=1:length(wavelet_peaks{i})
         for h=1:gap_limit
             %Search for peaks within the window size for scale i.
-            low_bnd = wavelet_peaks{i}(j) - wavelet_scales(i-h);
-            up_bnd = wavelet_peaks{i}(j) + wavelet_scales(i-h);
+            low_bnd = wavelet_peaks{i}(j) - in.scl(i-h);
+            up_bnd = wavelet_peaks{i}(j) + in.scl(i-h);
             low_set = wavelet_peaks{i-h}>low_bnd;
             up_set = wavelet_peaks{i-h}<up_bnd;
             %If a peak is found add it to the growing ridge
@@ -173,6 +166,7 @@ for i=size(wavelet_xfrm_coefs,1):-1:(gap_limit+1)
         end
     end
 end
+
 
 %Find the peaks of every ridge
 ridge_peaks=zeros(ridge_counter,2);
