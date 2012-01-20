@@ -68,7 +68,7 @@ temp = wavMexh;
 temp.cfs = -temp.cfs;
 ridgval = findRidgeMap(temp);
 protoval = processRidgeMap(ridgval);
-beautifyRidgeMap(ridgpks.map,ridgval.map,wavMexh.cfs)
+beautifyRidgeMap(ridgpks.map,ridgval.map,wavMexh.cfs);
 %The peaks of every ridge represent a candidate peak from the original
 %waveform. The ridge peak contains both positional and scale information.
 %Selective criteria based upon the scale can be used to sift through noise
