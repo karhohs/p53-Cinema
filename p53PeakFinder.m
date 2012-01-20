@@ -54,7 +54,8 @@ end
 
 %Find the ridgemap for peak detection using the continuous wavelet
 %transform.
-x = findRidgeMap(wavMexh)
+x = findRidgeMap(wavMexh);
+findRidgePeaks(in);
 end
 
 function [s,t] = scrubData(signal,time)
@@ -93,9 +94,14 @@ function [out] = findRidgeMap(in)
 %in: the CWT structure from the custom cwtft function in this file
 %
 %Output:
-%out: a cell array with ridges within each cell. Each ridge is a 2xn vector
-%where n is the length the the ridge. The first row of the vector contains
-%the scale component and the second row contains the time component.
+%out.scl: a cell array with ridges within each cell. Each ridge is a 1xN vector
+%where N is the length the the ridge. The vector contains the scale component.
+%out.cfs: a cell array the size of out.xy, but in each cell is a 1xN
+%vector where N is the length of the ridge. The vector contains the scale
+%of the ridge.
+%out.t: a cell array the size of out.xy, but in each cell is a 1xN
+%vector where N is the length of the ridge. The vector contains the time
+%of the ridge.
 wavelet_peaks = cell(size(in.cfs,1),1);
 for i=1:size(in.cfs,1)
     wavelet_peaks{i} = first_pass_peak_detection(...
@@ -168,23 +174,7 @@ for i=size(in.cfs,1):-1:(gap_limit+1)
 end
 
 
-%Find the peaks of every ridge
-ridge_peaks=zeros(ridge_counter,2);
-%weighted_ridge_peaks=zeros(ridge_counter,2);
-for i=1:ridge_counter
-    temp_map=ridge_map==i;
-    temp_map2=wavelet_xfrm_coefs-min(min(wavelet_xfrm_coefs));
-    temp_map2(~temp_map)=0;
-    [temp_max_vector,ind_vector]=max(temp_map2);
-    [~,ind]=max(temp_max_vector);
-    ridge_peaks(i,:)=[ind,ind_vector(ind)];
-    
-    %    temp_map=ridge_map==i;
-    %    temp_map2=weighted_wavelet_xfrm_coefs;
-    %    temp_map2(~temp_map)=0;
-    %    [temp_max_vector,ind_vector]=max(temp_map2);
-    %    [~,ind]=max(temp_max_vector);
-    %    weighted_ridge_peaks(i,:)=[ind,ind_vector(ind)];
+
 end
 
 %The peaks of every ridge represent a candidate peak from the original
@@ -434,4 +424,24 @@ out.cfs = real(out.cfs);
 for i = 1:length(out.scl)
     out.cfs(i,:) = out.cfs(i,:)/sqrt(out.scl(i));
 end
+end
+
+function [] = findRidgePeaks(in)
+%Find the peaks of every ridge
+ridge_peaks=zeros(ridge_counter,2);
+%weighted_ridge_peaks=zeros(ridge_counter,2);
+for i=1:ridge_counter
+    temp_map=ridge_map==i;
+    temp_map2=wavelet_xfrm_coefs-min(min(wavelet_xfrm_coefs));
+    temp_map2(~temp_map)=0;
+    [temp_max_vector,ind_vector]=max(temp_map2);
+    [~,ind]=max(temp_max_vector);
+    ridge_peaks(i,:)=[ind,ind_vector(ind)];
+    
+    %    temp_map=ridge_map==i;
+    %    temp_map2=weighted_wavelet_xfrm_coefs;
+    %    temp_map2(~temp_map)=0;
+    %    [temp_max_vector,ind_vector]=max(temp_map2);
+    %    [~,ind]=max(temp_max_vector);
+    %    weighted_ridge_peaks(i,:)=[ind,ind_vector(ind)];
 end
