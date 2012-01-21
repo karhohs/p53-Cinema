@@ -97,6 +97,7 @@ pcfs = cell(1,length(protoval));
 pcfs = cell2mat(pcfs);
 valltogether = [ptime;pscl;pcfs];
 %</DEBUG>
+
 end
 
 function [s,t] = scrubData(signal,time)
