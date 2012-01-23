@@ -1,4 +1,4 @@
-function [pks,vly,sus,ft,maps] = p53PeakFinder(signal,time,samplingFreq)
+function [pks,vly,sus,ssas,maps] = p53PeakFinder(signal,time,samplingFreq)
 % Input:
 % signal: presumabley a vector of time varying fluorescent protein data
 % time: the times at which measurements were taken
@@ -18,7 +18,7 @@ function [pks,vly,sus,ft,maps] = p53PeakFinder(signal,time,samplingFreq)
 % susPitch: This measure should give a sense of how long sustained
 % expression lasts as a measure of time. Sustained expression can be
 % thought of as very long plateaued pulses.
-% ft: the fourier transform of the signal
+% ssas: the single-sided amplitude spectrum from the fourier transform of the signal
 % maps: A collection of 2D matrices
 % maps.mexh.ridg
 % maps.mexh.cwtcfs
@@ -34,9 +34,14 @@ function [pks,vly,sus,ft,maps] = p53PeakFinder(signal,time,samplingFreq)
 % waveinfo('gaus') derivativeOfGaussian degree 1
 % To locate singularities and switches use the derivativeOfGaussian degree 1 wavelet.
 
-[s2,t] = scrubData(signal,time);
+%Find the ssas
+ssas = findSSAS(signal,time);
+
 %Baseline removal: Remove the baseline using the discrete wavelet transform
 %try imopen(x,strel('disk',w))
+sbr = imopen(signal,strel('disk',5));
+
+[s2,t] = scrubData(signal,time);
 
 %Find the de-scaled continous wavelet transform. De-scaled refers to
 %undoing the scaling done to ensure energy preservation.
@@ -526,4 +531,35 @@ out(val>0) = 0;
 figure
 colormap(oreojet)
 imagesc(out)
+end
+
+function [ssas,f] = findSSAS(signal,time,sf)
+%Input:
+%signal: the original input signal
+%time: the times at which the original signal was measured.
+%sf: sampling frequency
+%
+%Output:
+%ssas: the single-sided amplitude spectrum of the signal.
+
+t_diff = diff(time); %find time interval
+temp = median(t_diff);
+t = (time(1):temp:time(end)); %time points are equally spaced
+s = spline(time,signal,t); %Interpolate with splines
+L = length(s);
+h = hamming(L);
+if size(h,1) == size(s,1)
+    s = s.*h;
+else
+    s = s.*h';
+end
+NFFT = 2^nextpow2(L); % Next power of 2 from length of the signal, s
+ssas = fft(s,NFFT)/L;
+ssas = 2*abs(ssas(1:NFFT/2+1));
+f = sf/2*linspace(0,1,NFFT/2+1);
+% Plot single-sided amplitude spectrum.
+% stem(f,ssas,'fill','--') 
+% title('Single-Sided Amplitude Spectrum')
+% xlabel('Frequency (Hz)')
+% ylabel('|Y(f)|')
 end
