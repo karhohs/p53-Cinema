@@ -84,7 +84,10 @@ pscl = cell2mat(pscl);
 pcfs = cell(1,length(protopks));
 [pcfs{:}] = protopks.waveletcfs;
 pcfs = cell2mat(pcfs);
-palltogether = [ptime;pscl;pcfs];
+plen = cell(1,length(protopks));
+[plen{:}] = protopks.ridgelength;
+plen = cell2mat(plen);
+palltogether = [ptime;pscl;pcfs;plen];
 
 ptime = cell(1,length(protoval));
 [ptime{:}] = protoval.time;
@@ -95,7 +98,10 @@ pscl = cell2mat(pscl);
 pcfs = cell(1,length(protoval));
 [pcfs{:}] = protoval.waveletcfs;
 pcfs = cell2mat(pcfs);
-valltogether = [ptime;pscl;pcfs];
+plen = cell(1,length(protoval));
+[plen{:}] = protoval.ridgelength;
+plen = cell2mat(plen);
+valltogether = [ptime;pscl;pcfs;plen];
 %</DEBUG>
 
 end
@@ -484,6 +490,7 @@ function [out] = processRidgeMap(in)
 out(1000).time = [];
 out(1000).scale = [];
 out(1000).waveletcfs = [];
+out(1000).ridgelength = [];
 
 %Find the peak(s) of every ridge
 ind = 1;
@@ -499,6 +506,7 @@ for i=1:length(in.cfs)
         out(ind).time = in.t{i}(peak_index(j));
         out(ind).scale = in.scl{i}(peak_index(j));
         out(ind).waveletcfs = in.cfs{i}(peak_index(j));
+        out(ind).ridgelength = length(in.cfs{i});
         ind = ind+1;
     end
     end
