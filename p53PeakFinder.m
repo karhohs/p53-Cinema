@@ -67,12 +67,12 @@ end
 %transform.
 ridgpks = findRidgeMap(wavMexh);
 %opportunity here to prune ridges by length
-protopks = processRidgeMap(ridgpks);
+[protopks,pkSclStats] = processRidgeMap(ridgpks,wavMexh.scl,wavMexh.phz,length(s));
 %Repeat ridge mapping for valleys and switches
 temp = wavMexh;
 temp.cfs = -temp.cfs;
 ridgval = findRidgeMap(temp);
-protoval = processRidgeMap(ridgval);
+[protoval,valSclStats] = processRidgeMap(ridgval,wavMexh.scl,wavMexh.phz,length(s));
 beautifyRidgeMap(ridgpks.map,ridgval.map,wavMexh.cfs);
 %The peaks of every ridge represent a candidate peak from the original
 %waveform. The ridge peak contains both positional and scale information.
@@ -118,11 +118,10 @@ function [s,t] = scrubData(signal,time)
 %the FFT for wavelet transformation.
 t_diff = diff(time); %find time interval
 %The "secret sauce" equation below can be tuned by changing the divisor.
-%Empirically 3 seems to be fine for pulses and is recommended as a minimum.
+%Empirically 2 or 3 seems to be fine for pulses.
 %However, increasing this value increases the wavelet sensitivity to noise.
-%Setting this value to 6 yields more ridges in the noise range. This is
-%assuming the rate of p53 sampling is between 15 and 30 minutes.
-temp = median(t_diff)/1; % This equation is a sort of "secret sauce". Practically speaking, images will be taken at fixed intervals, but occassionally there are outlier intervals due to things such as irradiating cells. Therefore the median should filter out outliers and hone in on the typical behavior. Finally, dividing by 3 will increase the density of data points by 3 using interpolation. This helps identify high frequency content. 3 was chosen empirically.
+%This is assuming the rate of p53 sampling is between 15 and 30 minutes.
+temp = median(t_diff)/3; % This equation is a sort of "secret sauce". Practically speaking, images will be taken at fixed intervals, but occassionally there are outlier intervals due to things such as irradiating cells. Therefore the median should filter out outliers and hone in on the typical behavior. Finally, dividing by 3 will increase the density of data points by 3 using interpolation. This helps identify high frequency content. 3 was chosen empirically.
 t = (time(1):temp:time(end)); %time points are equally spaced
 s = spline(time,signal,t); %Interpolate with splines
 % Find the next power of two that greater than 150% the current.
@@ -254,17 +253,17 @@ end
 function [out]=first_pass_peak_detection(x,winw_size)
 %There are many ways to find peaks. The wavelet method is powerful at
 %detecting peaks but is actually dependent on simpler peak detection
-%methods. 
+%methods.
 
-    %Simple Peak Finding Method: Scan a signal with a window. Find the max. If the max is greater
-    %than the left and right endpoints of the window it is a peak candidate.
-    %The window is centered at each point of a waveform, so a wider peak
-    %candidate will recieve more votes in a sense. If a window has more than
-    %one point with the max value then the left most index is used. A downside
-    %to this method is that it is sensitive to the size of the window. However,
-    %this seeming limitation is actually put to use in the wavelet method by
-    %scaling the window along with the wavelet.
-    length_x = length(x);
+%Simple Peak Finding Method: Scan a signal with a window. Find the max. If the max is greater
+%than the left and right endpoints of the window it is a peak candidate.
+%The window is centered at each point of a waveform, so a wider peak
+%candidate will recieve more votes in a sense. If a window has more than
+%one point with the max value then the left most index is used. A downside
+%to this method is that it is sensitive to the size of the window. However,
+%this seeming limitation is actually put to use in the wavelet method by
+%scaling the window along with the wavelet.
+length_x = length(x);
 if size(x,2) == 1
     x=x';
 end
@@ -410,28 +409,24 @@ hs = length(in)/16;
 %Now implement a scale scheme
 pow102 = ceil(log(hs/10)/log(2));
 if pow102<2
-    wavelet_scales{1} = (1:10);
-    wavelet_scales{pow102}(wavelet_scales{pow102}>hs) = [];
-    temp = cwtft(in,'scales',wavelet_scales{1},'wavelet','mexh');
-    out.cfs = temp.cfs;
-    out.scl = wavelet_scales{1};
-    out.phz = wavelet_scales{1}*0.25; %0.25 is the pseudofrequency of the mexh for scale 1
-else
-    wavelet_scales = cell(1,pow102);
-    for i=1:pow102
-        wavelet_scales{i} = (1:10)*2^(i-1)+10*(2^(i-1)-1);
-    end
-    wavelet_scales{pow102}(wavelet_scales{pow102}>hs) = [];
-    temp = cwtft(in,'scales',wavelet_scales{1},'wavelet','mexh');
-    out.cfs = temp.cfs;
-    for i=2:pow102
-        temp = cwtft(in,'scales',wavelet_scales{i},'wavelet','mexh');
-        temp = temp.cfs;
-        out.cfs = [out.cfs;temp];
-    end
-    out.scl = cell2mat(wavelet_scales);
-    out.phz = out.scl*0.25; %0.25 is the pseudofrequency of the mexh for scale 1
+    pow102=2;
 end
+
+wavelet_scales = cell(1,pow102);
+for i=1:pow102
+    wavelet_scales{i} = (1:10)*2^(i-1)+10*(2^(i-1)-1);
+end
+wavelet_scales{pow102}(wavelet_scales{pow102}>hs) = [];
+temp = cwtft(in,'scales',wavelet_scales{1},'wavelet','mexh');
+out.cfs = temp.cfs;
+for i=2:pow102
+    temp = cwtft(in,'scales',wavelet_scales{i},'wavelet','mexh');
+    temp = temp.cfs;
+    out.cfs = [out.cfs;temp];
+end
+out.scl = cell2mat(wavelet_scales);
+out.phz = 1/(out.scl*4); %0.25 is the pseudofrequency of the mexh for scale 1
+
 out.cfs = real(out.cfs);
 for i = 1:length(out.scl)
     out.cfs(i,:) = out.cfs(i,:)/sqrt(out.scl(i));
@@ -454,35 +449,32 @@ hs = length(in)/16;
 %Now implement a scale scheme
 pow102 = ceil(log(hs/10)/log(2));
 if pow102<2
-    wavelet_scales{1} = (1:10);
-    wavelet_scales{pow102}(wavelet_scales{pow102}>hs) = [];
-    temp = cwtft(in,'scales',wavelet_scales{1},'wavelet',{'dog',1});
-    out.cfs = temp.cfs;
-    out.scl = wavelet_scales{1};
-    out.phz = wavelet_scales{1}*0.2; %0.2 is the pseudofrequency of the dog1 for scale 1
-else
-    wavelet_scales = cell(1,pow102);
-    for i=1:pow102
-        wavelet_scales{i} = (1:10)*2^(i-1)+10*(2^(i-1)-1);
-    end
-    wavelet_scales{pow102}(wavelet_scales{pow102}>hs) = [];
-    temp = cwtft(in,'scales',wavelet_scales{1},'wavelet',{'dog',1});
-    out.cfs = temp.cfs;
-    for i=2:pow102
-        temp = cwtft(in,'scales',wavelet_scales{i},'wavelet',{'dog',1});
-        temp = temp.cfs;
-        out.cfs = [out.cfs;temp];
-    end
-    out.scl = cell2mat(wavelet_scales);
-    out.phz = out.scl*0.2; %0.2 is the pseudofrequency of the dog1 for scale 1
+    pow102=2;
 end
+
+
+wavelet_scales = cell(1,pow102);
+for i=1:pow102
+    wavelet_scales{i} = (1:10)*2^(i-1)+10*(2^(i-1)-1);
+end
+wavelet_scales{pow102}(wavelet_scales{pow102}>hs) = [];
+temp = cwtft(in,'scales',wavelet_scales{1},'wavelet',{'dog',1});
+out.cfs = temp.cfs;
+for i=2:pow102
+    temp = cwtft(in,'scales',wavelet_scales{i},'wavelet',{'dog',1});
+    temp = temp.cfs;
+    out.cfs = [out.cfs;temp];
+end
+out.scl = cell2mat(wavelet_scales);
+out.phz = 1/(out.scl*5); %0.2 is the pseudofrequency of the dog1 for scale 1
+
 out.cfs = real(out.cfs);
 for i = 1:length(out.scl)
     out.cfs(i,:) = out.cfs(i,:)/sqrt(out.scl(i));
 end
 end
 
-function [out] = processRidgeMap(in)
+function [out,scale_stats] = processRidgeMap(in,scales,pseudoHz,len_sig)
 %Input:
 %in: the output, ridges, from findRidgeMap();
 %
@@ -491,6 +483,19 @@ function [out] = processRidgeMap(in)
 %out.time = the time of a peak
 %out.scale = the scale of that same peak
 %out.waveletcfs = the wavelet coefficient at at that time and scale.
+%scale_stats: statistics about the peaks contained in each scale. These are
+%used to separate high frequency noise, from signal, from low frequency
+%noise.
+%scale_stats.numberOfPeaks = self explanatory
+%scale_stats.meanCfsOfPeaks = mean value of the wavelet coefficients of the
+%peaks at a given scale.
+%scale_stats.varCfsOfPeaks = variance of the wavelet coefficients of the
+%peaks at a given scale.
+%scale_stats.peakEnrichment = Higher scales are expected to yield fewer
+%peaks relative to lower scales. To account for this a measure of peak
+%enrichment is defined as the number of peaks found relative to the number
+%of peaks that would be identified if the signal was a sinusoid at the
+%frequency that corresponds with that scale.
 
 %pre-allocate struct that will contain peak information (assuming not more
 %than 1000 peaks)
@@ -498,7 +503,16 @@ out(1000).time = [];
 out(1000).scale = [];
 out(1000).waveletcfs = [];
 out(1000).ridgelength = [];
-
+%Pre-allocate scale_stats
+L = length(scales);
+indArray = (1:L);
+temp = num2cell(scales);
+scale_stats = cell2struct(temp,'scale',1);
+scale_stats(L).peakIdentity = [];
+scale_stats(L).numberOfPeaks = [];
+scale_stats(L).meanCfsOfPeaks = [];
+scale_stats(L).varCfsOfPeaks = [];
+scale_stats(L).peakEnrichment = [];
 %Find the peak(s) of every ridge
 ind = 1;
 for i=1:length(in.cfs)
@@ -508,17 +522,54 @@ for i=1:length(in.cfs)
     %scale density/coverage.
     peak_index = watershed(in.cfs{i});
     peak_index = find(~peak_index);
+    temp_max = -inf;
     if ~isempty(peak_index)
-    for j=1:length(peak_index)
-        out(ind).time = in.t{i}(peak_index(j));
-        out(ind).scale = in.scl{i}(peak_index(j));
-        out(ind).waveletcfs = in.cfs{i}(peak_index(j));
+        for j=1:length(peak_index)
+            out(ind).time = in.t{i}(peak_index(j));
+            out(ind).scale = in.scl{i}(peak_index(j));
+            scale_stats(indArray(scales == out(ind).scale)).peakIdentity(end+1) = ind;
+            out(ind).waveletcfs = in.cfs{i}(peak_index(j));
+            out(ind).ridgelength = length(in.cfs{i});
+            if temp_max < in.cfs{i}(peak_index(j))
+                temp_max = in.cfs{i}(peak_index(j));
+            end
+            ind = ind+1;
+        end
+        if temp_max < max(in.cfs{i})
+            [out(ind).waveletcfs,ind2] = max(in.cfs{i});
+            out(ind).ridgelength = length(in.cfs{i});
+            out(ind).time = in.t{i}(ind2);
+            out(ind).scale = in.scl{i}(ind2);
+            scale_stats(indArray(scales == out(ind).scale)).peakIdentity(end+1) = ind;
+            ind = ind+1;
+        end
+    else
+        [out(ind).waveletcfs,ind2] = max(in.cfs{i});
         out(ind).ridgelength = length(in.cfs{i});
+        out(ind).time = in.t{i}(ind2);
+        out(ind).scale = in.scl{i}(ind2);
+        scale_stats(indArray(scales == out(ind).scale)).peakIdentity(end+1) = ind;
         ind = ind+1;
-    end
     end
 end
 out(ind:end)=[]; %remove empty pre-allocated space from struct
+
+%Populate the scale statistics
+pseudoHz = len_sig*pseudoHz;
+for i=1:length(scale_stats)
+    if isempty(scale_stats(i).peakIdentity)
+        scale_stats(i).numberOfPeaks = 0;
+    else
+        scale_stats(i).numberOfPeaks = length(scale_stats(i).peakIdentity);
+        temp = zeros(size(scale_stats(i).peakIdentity));
+        for j=1:scale_stats(i).numberOfPeaks
+            temp(j) = out(scale_stats(i).peakIdentity(j)).waveletcfs;
+        end
+        scale_stats(i).meanCfsOfPeaks = mean(temp);
+        scale_stats(i).varCfsOfPeaks = var(temp);
+        scale_stats(i).peakEnrichment = scale_stats(i).numberOfPeaks/pseudoHz(i);
+    end
+end
 end
 
 function [out] = beautifyRidgeMap(pks,val,cfsmap)
@@ -560,7 +611,7 @@ ssas = fft(s,NFFT)/L;
 ssas = 2*abs(ssas(1:NFFT/2+1));
 f = sf/2*linspace(0,1,NFFT/2+1);
 % Plot single-sided amplitude spectrum.
-% stem(f,ssas,'fill','--') 
+% stem(f,ssas,'fill','--')
 % title('Single-Sided Amplitude Spectrum')
 % xlabel('Frequency (Hz)')
 % ylabel('|Y(f)|')
