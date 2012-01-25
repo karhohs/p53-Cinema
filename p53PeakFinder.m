@@ -78,6 +78,8 @@ beautifyRidgeMap(ridgpks.map,ridgval.map,wavMexh.cfs);
 %waveform. The ridge peak contains both positional and scale information.
 %Selective criteria based upon the scale can be used to sift through noise
 %and get a sense for the breadth of each peak.
+processPeaks(s,protopks,pkSclStats)
+processPeaks(s,protoval,valSclStats)
 %<DEBUG>
 
 ptime = cell(1,length(protopks));
@@ -107,6 +109,19 @@ plen = cell(1,length(protoval));
 [plen{:}] = protoval.ridgelength;
 plen = cell2mat(plen);
 valltogether = [ptime;pscl;pcfs;plen];
+
+pstat1 = cell(1,length(pkSclStats));
+[pstat1{:}] = pkSclStats.numberOfPeaks;
+pstat1 = cell2mat(pstat1);
+pstat2 = cell(1,length(pkSclStats));
+[pstat2{:}] = pkSclStats.meanCfsOfPeaks;
+pstat2 = cell2mat(pstat2);
+pstat3 = cell(1,length(pkSclStats));
+[pstat3{:}] = pkSclStats.peakEnrichment;
+pstat3 = cell2mat(pstat3);
+pstat4 = pstat1.*pstat2.*pstat3;
+pstat4 = smooth(pstat4,3);
+
 %</DEBUG>
 
 end
@@ -425,7 +440,7 @@ for i=2:pow102
     out.cfs = [out.cfs;temp];
 end
 out.scl = cell2mat(wavelet_scales);
-out.phz = 1/(out.scl*4); %0.25 is the pseudofrequency of the mexh for scale 1
+out.phz = 1./(out.scl*4); %0.25 is the pseudofrequency of the mexh for scale 1
 
 out.cfs = real(out.cfs);
 for i = 1:length(out.scl)
@@ -466,7 +481,7 @@ for i=2:pow102
     out.cfs = [out.cfs;temp];
 end
 out.scl = cell2mat(wavelet_scales);
-out.phz = 1/(out.scl*5); %0.2 is the pseudofrequency of the dog1 for scale 1
+out.phz = 1./(out.scl*5); %0.2 is the pseudofrequency of the dog1 for scale 1
 
 out.cfs = real(out.cfs);
 for i = 1:length(out.scl)
@@ -559,6 +574,9 @@ pseudoHz = len_sig*pseudoHz;
 for i=1:length(scale_stats)
     if isempty(scale_stats(i).peakIdentity)
         scale_stats(i).numberOfPeaks = 0;
+        scale_stats(i).meanCfsOfPeaks = 0;
+        scale_stats(i).varCfsOfPeaks = 0;
+        scale_stats(i).peakEnrichment = 0;
     else
         scale_stats(i).numberOfPeaks = length(scale_stats(i).peakIdentity);
         temp = zeros(size(scale_stats(i).peakIdentity));
@@ -615,4 +633,113 @@ f = sf/2*linspace(0,1,NFFT/2+1);
 % title('Single-Sided Amplitude Spectrum')
 % xlabel('Frequency (Hz)')
 % ylabel('|Y(f)|')
+end
+
+function [outpks] = processPeaks(s,inpks,sts)
+
+
+
+%Here is a recipe for determing a threshold that defines high frequency
+%noise. First create a statistic for each scale that is the product of the
+%number of peaks, the average wavelet coefficient of a peak, and the peak
+%enrichment value. Then smooth this statistic to favor the signal being
+%present across multiple scales. Then find the maximum of this statisitic.
+%This represents the scale that contains the signal. A threshold cutoff for
+%high frequency noise is then defined as 20% of the mean peak value at the
+%scale with signal.
+pstat1 = cell(1,length(sts));
+[pstat1{:}] = sts.numberOfPeaks;
+pstat1 = cell2mat(pstat1);
+pstat2 = cell(1,length(sts));
+[pstat2{:}] = sts.meanCfsOfPeaks;
+pstat2 = cell2mat(pstat2);
+pstat3 = cell(1,length(sts));
+[pstat3{:}] = sts.peakEnrichment;
+pstat3 = cell2mat(pstat3);
+pstat4 = pstat1.*pstat2.*pstat3;
+pstat4 = smooth(pstat4,3);
+[~,ind] = max(pstat4);
+thresh = 0.2*pstat2(ind);
+
+%Separate high frequency peaks from the rest of the peaks.
+outpks = inpks;
+outpks(end).type = [];
+%type = 0 is temporarily undefined
+%type = 1 is high frequency noise
+%type = 2 is signal
+%type = 3 is low frequency noise
+for i=1:length(inpks)
+    if inpks(i).waveletcfs < thresh
+        outpks(i).type = 1;
+    else
+        outpks(i).type = 0;
+    end
+end
+
+%Signal peaks are identified by scanning the peaks by their scale in
+%ascending order. A peak at a given scale will be compared to the peak
+%value of the signal in a window of size proportional to scale. If another
+%peak is found in this window then the peak is classified as low frequency
+%noise. If another peak is not found, then the peak is adjusted to the
+%highest point on the signal and classified as signal.
+
+ptime = cell(1,length(inpks));
+[ptime{:}] = inpks.time;
+ptime = cell2mat(ptime);
+pscl = cell(1,length(inpks));
+[pscl{:}] = inpks.scale;
+pscl = cell2mat(pscl);
+[timeSorted,timeIndex] = sortrows(ptime',1);
+L=length(timeSorted);
+temp = (1:L)';
+temp = [temp,timeIndex];
+temp = sortrows(temp,2);
+timeIndex = temp(:,1);
+[~,scaleIndex] = sortrows(pscl',1);
+palltogether = [ptime',pscl',timeIndex];
+peakFillMap = zeros(size(timeSorted));
+for i=1:L
+    indS = scaleIndex(i);
+    if outpks(indS).type == 0
+        %scan for peaks left
+        indT = palltogether(indS,3);
+        indTLeft = palltogether(indS,3);
+        indTRight = palltogether(indS,3);
+        time = palltogether(indS,1);
+        window = 2*palltogether(indS,2);
+        flag = true;
+        while (indTLeft>1) && flag
+            temp = timeSorted(indTLeft,1);
+            if abs(temp-time)<= window
+                indTLeft = indTLeft - 1;
+            else
+                flag = false;
+                indTLeft = indTLeft + 1;
+            end
+        end
+        flag = true;
+        while (indTRight<L) && flag
+            temp = timeSorted(indTRight,1);
+            if abs(temp-time)<= window
+                indTRight = indTRight + 1;
+            else
+                flag = false;
+                indTRight = indTRight - 1;
+            end
+        end
+        if any(peakFillMap(indTLeft:indTRight))
+            peakFillMap(indT) = 1;
+            outpks(indS).type = 3;
+        else
+            peakFillMap(indT) = 1;
+            indL = timeSorted(indTLeft);
+            indR = timeSorted(indTRight);
+            [max_s,ind] = max(s(indL:indR));
+            ind = ind + indL -1;
+            outpks(indS).type = 2;
+            outpks(indS).time = ind;
+            outpks(indS).value = max_s;
+        end
+    end
+end
 end
