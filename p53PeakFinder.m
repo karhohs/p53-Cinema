@@ -78,9 +78,23 @@ beautifyRidgeMap(ridgpks.map,ridgval.map,wavMexh.cfs);
 %waveform. The ridge peak contains both positional and scale information.
 %Selective criteria based upon the scale can be used to sift through noise
 %and get a sense for the breadth of each peak.
-processPeaks(s,protopks,pkSclStats)
-processPeaks(s,protoval,valSclStats)
+pks = processPeaks(s,protopks,pkSclStats);
+vly = processPeaks(-s,protoval,valSclStats);
 %<DEBUG>
+ptime = cell(1,length(protoval));
+[ptime{:}] = protoval.time;
+ptime = cell2mat(ptime);
+pscl = cell(1,length(protoval));
+[pscl{:}] = protoval.scale;
+pscl = cell2mat(pscl);
+pcfs = cell(1,length(protoval));
+[pcfs{:}] = protoval.waveletcfs;
+pcfs = cell2mat(pcfs);
+plen = cell(1,length(protoval));
+[plen{:}] = protoval.ridgelength;
+plen = cell2mat(plen);
+valltogether = [ptime',pscl',pcfs',plen'];
+valltogether = sortrows(palltogether,1);
 
 ptime = cell(1,length(protopks));
 [ptime{:}] = protopks.time;
@@ -94,36 +108,10 @@ pcfs = cell2mat(pcfs);
 plen = cell(1,length(protopks));
 [plen{:}] = protopks.ridgelength;
 plen = cell2mat(plen);
-palltogether = [ptime;pscl;pcfs;plen];
-
-ptime = cell(1,length(protoval));
-[ptime{:}] = protoval.time;
-ptime = cell2mat(ptime);
-pscl = cell(1,length(protoval));
-[pscl{:}] = protoval.scale;
-pscl = cell2mat(pscl);
-pcfs = cell(1,length(protoval));
-[pcfs{:}] = protoval.waveletcfs;
-pcfs = cell2mat(pcfs);
-plen = cell(1,length(protoval));
-[plen{:}] = protoval.ridgelength;
-plen = cell2mat(plen);
-valltogether = [ptime;pscl;pcfs;plen];
-
-pstat1 = cell(1,length(pkSclStats));
-[pstat1{:}] = pkSclStats.numberOfPeaks;
-pstat1 = cell2mat(pstat1);
-pstat2 = cell(1,length(pkSclStats));
-[pstat2{:}] = pkSclStats.meanCfsOfPeaks;
-pstat2 = cell2mat(pstat2);
-pstat3 = cell(1,length(pkSclStats));
-[pstat3{:}] = pkSclStats.peakEnrichment;
-pstat3 = cell2mat(pstat3);
-pstat4 = pstat1.*pstat2.*pstat3;
-pstat4 = smooth(pstat4,3);
-
+palltogether = [ptime',pscl',pcfs',plen'];
+palltogether = sortrows(palltogether,1);
 %</DEBUG>
-
+plotPeaksAndValleys(s,pks,vly)
 end
 
 function [s,t] = scrubData(signal,time)
@@ -659,7 +647,7 @@ pstat3 = cell2mat(pstat3);
 pstat4 = pstat1.*pstat2.*pstat3;
 pstat4 = smooth(pstat4,3);
 [~,ind] = max(pstat4);
-thresh = 0.2*pstat2(ind);
+thresh = 0.4*pstat2(ind);
 
 %Separate high frequency peaks from the rest of the peaks.
 outpks = inpks;
@@ -732,14 +720,57 @@ for i=1:L
             outpks(indS).type = 3;
         else
             peakFillMap(indT) = 1;
-            indL = timeSorted(indTLeft);
-            indR = timeSorted(indTRight);
+            indL = time-window;
+            if indL <= 0
+                indL = 1;
+            end
+            indR = time+window;
+            Ls = length(s);
+            if indR > Ls
+                indR = Ls;
+            end
             [max_s,ind] = max(s(indL:indR));
-            ind = ind + indL -1;
+            ind = ind + indL - 1;
             outpks(indS).type = 2;
             outpks(indS).time = ind;
-            outpks(indS).value = max_s;
+            outpks(indS).value = abs(max_s);
         end
     end
 end
+end
+
+function [] = plotPeaksAndValleys(s,pks,vly)
+figure
+plot(s)
+hold on
+%Show signal peaks
+temp1 = zeros(length(s),1);
+temp2 = zeros(length(s),1);
+for i=1:length(pks)
+    if pks(i).type == 2
+        temp1(i) = pks(i).time;
+        temp2(i) = pks(i).value;
+    end
+end
+peak_index = temp1(temp1>0);
+peak_value = temp2(temp2>0);
+scatter(peak_index,peak_value,'filled','MarkerFaceColor','red');
+%Show signal valleys
+temp1 = zeros(length(s),1);
+temp2 = zeros(length(s),1);
+for i=1:length(vly)
+    if vly(i).type == 2
+        temp1(i) = vly(i).time;
+        temp2(i) = vly(i).value;
+    end
+end
+peak_index = temp1(temp1>0);
+peak_value = temp2(temp2>0);
+scatter(peak_index,peak_value,'filled','MarkerFaceColor','blue');
+s2=s;
+temp=(1:length(s));
+temp(peak_index)=[];
+s2(temp)=NaN;
+plot(s2,'o','color','r')
+hold off
 end
