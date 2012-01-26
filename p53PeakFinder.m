@@ -65,13 +65,13 @@ end
 
 %Find the ridgemap for peak detection using the continuous wavelet
 %transform.
-ridgpks = findRidgeMap(wavMexh);
+[ridgpks,wavpeaks] = findRidgeMap(wavMexh);
 %opportunity here to prune ridges by length
 [protopks,pkSclStats] = processRidgeMap(ridgpks,wavMexh.scl,wavMexh.phz,length(s));
 %Repeat ridge mapping for valleys and switches
 temp = wavMexh;
 temp.cfs = -temp.cfs;
-ridgval = findRidgeMap(temp);
+[ridgval,waveval] = findRidgeMap(temp);
 [protoval,valSclStats] = processRidgeMap(ridgval,wavMexh.scl,wavMexh.phz,length(s));
 beautifyRidgeMap(ridgpks.map,ridgval.map,wavMexh.cfs);
 %The peaks of every ridge represent a candidate peak from the original
@@ -94,7 +94,7 @@ plen = cell(1,length(protoval));
 [plen{:}] = protoval.ridgelength;
 plen = cell2mat(plen);
 valltogether = [ptime',pscl',pcfs',plen'];
-valltogether = sortrows(palltogether,1);
+valltogether = sortrows(valltogether,1);
 
 ptime = cell(1,length(protopks));
 [ptime{:}] = protopks.time;
@@ -111,6 +111,7 @@ plen = cell2mat(plen);
 palltogether = [ptime',pscl',pcfs',plen'];
 palltogether = sortrows(palltogether,1);
 %</DEBUG>
+%rapid_report(waveval,-wavMexh.cfs,ridgval.map,t,s)
 plotPeaksAndValleys(s,pks,vly)
 end
 
@@ -149,7 +150,7 @@ tukey33=tukeywin(length(s),0.33)';
 s = s.*tukey33;
 end
 
-function [out] = findRidgeMap(in)
+function [out,wavelet_peaks] = findRidgeMap(in)
 %Input:
 %in: the CWT structure from the custom cwtft function in this file
 %
@@ -186,8 +187,8 @@ for i=size(in.cfs,1):-1:(gap_limit+1)
     for j=1:length(wavelet_peaks{i})
         for h=1:gap_limit
             %Search for peaks within the window size for scale i.
-            low_bnd = wavelet_peaks{i}(j) - in.scl(i-h);
-            up_bnd = wavelet_peaks{i}(j) + in.scl(i-h);
+            low_bnd = wavelet_peaks{i}(j) - 2*in.scl(i-h);
+            up_bnd = wavelet_peaks{i}(j) + 2*in.scl(i-h);
             low_set = wavelet_peaks{i-h}>low_bnd;
             up_set = wavelet_peaks{i-h}<up_bnd;
             %If a peak is found add it to the growing ridge
@@ -329,7 +330,7 @@ plot(x2,'x','color','r')
 hold off
 end
 
-function []=rapid_report(wavelet_peaks,wavelet_xfrm_coefs,ridge_map,x,y,peaks_p53_pulses)
+function []=rapid_report(wavelet_peaks,wavelet_xfrm_coefs,ridge_map,x,y)
 temp = clock;
 time_stamp = regexprep(num2str(temp(1:5)),'\s','');
 filename = ['wavelet_analysis_' time_stamp];
@@ -356,20 +357,8 @@ end
 
 my_fig = figure;
 imagesc(ridge_map)
-colormap('jet')
+penguinjet;
 title('Ridge Map')
-print(my_fig,[filename '.ps'],'-dpsc2','-painters','-append');
-close(my_fig)
-
-my_fig = figure;
-plot(x,y,'Color','black')
-hold on
-temp_y=NaN(size(y));
-temp_peaks=y(peaks_p53_pulses);
-temp_y(peaks_p53_pulses)=temp_peaks;
-plot(x,temp_y,'d','color','red','MarkerSize',6,'MarkerFaceColor','red')
-title('Original Waveform with Peaks')
-hold off
 print(my_fig,[filename '.ps'],'-dpsc2','-painters','-append');
 close(my_fig)
 
@@ -516,6 +505,7 @@ scale_stats(L).numberOfPeaks = [];
 scale_stats(L).meanCfsOfPeaks = [];
 scale_stats(L).varCfsOfPeaks = [];
 scale_stats(L).peakEnrichment = [];
+scale_stats(L).meanRidgeLength = [];
 %Find the peak(s) of every ridge
 ind = 1;
 for i=1:length(in.cfs)
@@ -565,15 +555,19 @@ for i=1:length(scale_stats)
         scale_stats(i).meanCfsOfPeaks = 0;
         scale_stats(i).varCfsOfPeaks = 0;
         scale_stats(i).peakEnrichment = 0;
+        scale_stats(i).meanRidgeLength = 0;
     else
         scale_stats(i).numberOfPeaks = length(scale_stats(i).peakIdentity);
         temp = zeros(size(scale_stats(i).peakIdentity));
+        temp2 = zeros(size(scale_stats(i).peakIdentity));
         for j=1:scale_stats(i).numberOfPeaks
             temp(j) = out(scale_stats(i).peakIdentity(j)).waveletcfs;
+            temp2(j) = out(scale_stats(i).peakIdentity(j)).ridgelength;
         end
         scale_stats(i).meanCfsOfPeaks = mean(temp);
         scale_stats(i).varCfsOfPeaks = var(temp);
         scale_stats(i).peakEnrichment = scale_stats(i).numberOfPeaks/pseudoHz(i);
+        scale_stats(i).meanRidgeLength = mean(temp2);
     end
 end
 end
@@ -581,15 +575,19 @@ end
 function [out] = beautifyRidgeMap(pks,val,cfsmap)
 %create the "white jet" colormap. It is the jet colormap, but the highest
 %value
-penguinjet = [0,0,0;0,0,0.53125;0,0,0.546875;0,0,0.5625;0,0,0.578125;0,0,0.59375;0,0,0.609375;0,0,0.625;0,0,0.640625;0,0,0.65625;0,0,0.671875;0,0,0.6875;0,0,0.703125;0,0,0.71875;0,0,0.734375;0,0,0.75;0,0,0.765625;0,0,0.78125;0,0,0.796875;0,0,0.8125;0,0,0.828125;0,0,0.84375;0,0,0.859375;0,0,0.875;0,0,0.890625;0,0,0.90625;0,0,0.921875;0,0,0.9375;0,0,0.953125;0,0,0.96875;0,0,0.984375;0,0,1;0,0.015625,1;0,0.03125,1;0,0.046875,1;0,0.0625,1;0,0.078125,1;0,0.09375,1;0,0.109375,1;0,0.125,1;0,0.140625,1;0,0.15625,1;0,0.171875,1;0,0.1875,1;0,0.203125,1;0,0.21875,1;0,0.234375,1;0,0.25,1;0,0.265625,1;0,0.28125,1;0,0.296875,1;0,0.3125,1;0,0.328125,1;0,0.34375,1;0,0.359375,1;0,0.375,1;0,0.390625,1;0,0.40625,1;0,0.421875,1;0,0.4375,1;0,0.453125,1;0,0.46875,1;0,0.484375,1;0,0.5,1;0,0.515625,1;0,0.53125,1;0,0.546875,1;0,0.5625,1;0,0.578125,1;0,0.59375,1;0,0.609375,1;0,0.625,1;0,0.640625,1;0,0.65625,1;0,0.671875,1;0,0.6875,1;0,0.703125,1;0,0.71875,1;0,0.734375,1;0,0.75,1;0,0.765625,1;0,0.78125,1;0,0.796875,1;0,0.8125,1;0,0.828125,1;0,0.84375,1;0,0.859375,1;0,0.875,1;0,0.890625,1;0,0.90625,1;0,0.921875,1;0,0.9375,1;0,0.953125,1;0,0.96875,1;0,0.984375,1;0,1,1;0.015625,1,0.984375;0.03125,1,0.96875;0.046875,1,0.953125;0.0625,1,0.9375;0.078125,1,0.921875;0.09375,1,0.90625;0.109375,1,0.890625;0.125,1,0.875;0.140625,1,0.859375;0.15625,1,0.84375;0.171875,1,0.828125;0.1875,1,0.8125;0.203125,1,0.796875;0.21875,1,0.78125;0.234375,1,0.765625;0.25,1,0.75;0.265625,1,0.734375;0.28125,1,0.71875;0.296875,1,0.703125;0.3125,1,0.6875;0.328125,1,0.671875;0.34375,1,0.65625;0.359375,1,0.640625;0.375,1,0.625;0.390625,1,0.609375;0.40625,1,0.59375;0.421875,1,0.578125;0.4375,1,0.5625;0.453125,1,0.546875;0.46875,1,0.53125;0.484375,1,0.515625;0.5,1,0.5;0.515625,1,0.484375;0.53125,1,0.46875;0.546875,1,0.453125;0.5625,1,0.4375;0.578125,1,0.421875;0.59375,1,0.40625;0.609375,1,0.390625;0.625,1,0.375;0.640625,1,0.359375;0.65625,1,0.34375;0.671875,1,0.328125;0.6875,1,0.3125;0.703125,1,0.296875;0.71875,1,0.28125;0.734375,1,0.265625;0.75,1,0.25;0.765625,1,0.234375;0.78125,1,0.21875;0.796875,1,0.203125;0.8125,1,0.1875;0.828125,1,0.171875;0.84375,1,0.15625;0.859375,1,0.140625;0.875,1,0.125;0.890625,1,0.109375;0.90625,1,0.09375;0.921875,1,0.078125;0.9375,1,0.0625;0.953125,1,0.046875;0.96875,1,0.03125;0.984375,1,0.015625;1,1,0;1,0.984375,0;1,0.96875,0;1,0.953125,0;1,0.9375,0;1,0.921875,0;1,0.90625,0;1,0.890625,0;1,0.875,0;1,0.859375,0;1,0.84375,0;1,0.828125,0;1,0.8125,0;1,0.796875,0;1,0.78125,0;1,0.765625,0;1,0.75,0;1,0.734375,0;1,0.71875,0;1,0.703125,0;1,0.6875,0;1,0.671875,0;1,0.65625,0;1,0.640625,0;1,0.625,0;1,0.609375,0;1,0.59375,0;1,0.578125,0;1,0.5625,0;1,0.546875,0;1,0.53125,0;1,0.515625,0;1,0.5,0;1,0.484375,0;1,0.46875,0;1,0.453125,0;1,0.4375,0;1,0.421875,0;1,0.40625,0;1,0.390625,0;1,0.375,0;1,0.359375,0;1,0.34375,0;1,0.328125,0;1,0.3125,0;1,0.296875,0;1,0.28125,0;1,0.265625,0;1,0.25,0;1,0.234375,0;1,0.21875,0;1,0.203125,0;1,0.1875,0;1,0.171875,0;1,0.15625,0;1,0.140625,0;1,0.125,0;1,0.109375,0;1,0.09375,0;1,0.078125,0;1,0.0625,0;1,0.046875,0;1,0.03125,0;1,0.015625,0;1,0,0;0.984375,0,0;0.96875,0,0;0.953125,0,0;0.9375,0,0;0.921875,0,0;0.90625,0,0;0.890625,0,0;0.875,0,0;0.859375,0,0;0.84375,0,0;0.828125,0,0;0.8125,0,0;0.796875,0,0;0.78125,0,0;0.765625,0,0;0.75,0,0;0.734375,0,0;0.71875,0,0;0.703125,0,0;0.6875,0,0;0.671875,0,0;0.65625,0,0;0.640625,0,0;0.625,0,0;0.609375,0,0;0.59375,0,0;0.578125,0,0;0.5625,0,0;0.546875,0,0;0.53125,0,0;0.515625,0,0;1,1,1];
 cfsmap_min = min(min(cfsmap));
 cfsmap = ((cfsmap - cfsmap_min)*253/(max(max(cfsmap))-cfsmap_min))+1;
 out = cfsmap;
 out(pks>0) = 255;
 out(val>0) = 0;
 figure
-colormap(penguinjet)
+penguinjet;
 imagesc(out)
+end
+
+function [] = penguinjet()
+tuxedojet = [0,0,0;0,0,0.53125;0,0,0.546875;0,0,0.5625;0,0,0.578125;0,0,0.59375;0,0,0.609375;0,0,0.625;0,0,0.640625;0,0,0.65625;0,0,0.671875;0,0,0.6875;0,0,0.703125;0,0,0.71875;0,0,0.734375;0,0,0.75;0,0,0.765625;0,0,0.78125;0,0,0.796875;0,0,0.8125;0,0,0.828125;0,0,0.84375;0,0,0.859375;0,0,0.875;0,0,0.890625;0,0,0.90625;0,0,0.921875;0,0,0.9375;0,0,0.953125;0,0,0.96875;0,0,0.984375;0,0,1;0,0.015625,1;0,0.03125,1;0,0.046875,1;0,0.0625,1;0,0.078125,1;0,0.09375,1;0,0.109375,1;0,0.125,1;0,0.140625,1;0,0.15625,1;0,0.171875,1;0,0.1875,1;0,0.203125,1;0,0.21875,1;0,0.234375,1;0,0.25,1;0,0.265625,1;0,0.28125,1;0,0.296875,1;0,0.3125,1;0,0.328125,1;0,0.34375,1;0,0.359375,1;0,0.375,1;0,0.390625,1;0,0.40625,1;0,0.421875,1;0,0.4375,1;0,0.453125,1;0,0.46875,1;0,0.484375,1;0,0.5,1;0,0.515625,1;0,0.53125,1;0,0.546875,1;0,0.5625,1;0,0.578125,1;0,0.59375,1;0,0.609375,1;0,0.625,1;0,0.640625,1;0,0.65625,1;0,0.671875,1;0,0.6875,1;0,0.703125,1;0,0.71875,1;0,0.734375,1;0,0.75,1;0,0.765625,1;0,0.78125,1;0,0.796875,1;0,0.8125,1;0,0.828125,1;0,0.84375,1;0,0.859375,1;0,0.875,1;0,0.890625,1;0,0.90625,1;0,0.921875,1;0,0.9375,1;0,0.953125,1;0,0.96875,1;0,0.984375,1;0,1,1;0.015625,1,0.984375;0.03125,1,0.96875;0.046875,1,0.953125;0.0625,1,0.9375;0.078125,1,0.921875;0.09375,1,0.90625;0.109375,1,0.890625;0.125,1,0.875;0.140625,1,0.859375;0.15625,1,0.84375;0.171875,1,0.828125;0.1875,1,0.8125;0.203125,1,0.796875;0.21875,1,0.78125;0.234375,1,0.765625;0.25,1,0.75;0.265625,1,0.734375;0.28125,1,0.71875;0.296875,1,0.703125;0.3125,1,0.6875;0.328125,1,0.671875;0.34375,1,0.65625;0.359375,1,0.640625;0.375,1,0.625;0.390625,1,0.609375;0.40625,1,0.59375;0.421875,1,0.578125;0.4375,1,0.5625;0.453125,1,0.546875;0.46875,1,0.53125;0.484375,1,0.515625;0.5,1,0.5;0.515625,1,0.484375;0.53125,1,0.46875;0.546875,1,0.453125;0.5625,1,0.4375;0.578125,1,0.421875;0.59375,1,0.40625;0.609375,1,0.390625;0.625,1,0.375;0.640625,1,0.359375;0.65625,1,0.34375;0.671875,1,0.328125;0.6875,1,0.3125;0.703125,1,0.296875;0.71875,1,0.28125;0.734375,1,0.265625;0.75,1,0.25;0.765625,1,0.234375;0.78125,1,0.21875;0.796875,1,0.203125;0.8125,1,0.1875;0.828125,1,0.171875;0.84375,1,0.15625;0.859375,1,0.140625;0.875,1,0.125;0.890625,1,0.109375;0.90625,1,0.09375;0.921875,1,0.078125;0.9375,1,0.0625;0.953125,1,0.046875;0.96875,1,0.03125;0.984375,1,0.015625;1,1,0;1,0.984375,0;1,0.96875,0;1,0.953125,0;1,0.9375,0;1,0.921875,0;1,0.90625,0;1,0.890625,0;1,0.875,0;1,0.859375,0;1,0.84375,0;1,0.828125,0;1,0.8125,0;1,0.796875,0;1,0.78125,0;1,0.765625,0;1,0.75,0;1,0.734375,0;1,0.71875,0;1,0.703125,0;1,0.6875,0;1,0.671875,0;1,0.65625,0;1,0.640625,0;1,0.625,0;1,0.609375,0;1,0.59375,0;1,0.578125,0;1,0.5625,0;1,0.546875,0;1,0.53125,0;1,0.515625,0;1,0.5,0;1,0.484375,0;1,0.46875,0;1,0.453125,0;1,0.4375,0;1,0.421875,0;1,0.40625,0;1,0.390625,0;1,0.375,0;1,0.359375,0;1,0.34375,0;1,0.328125,0;1,0.3125,0;1,0.296875,0;1,0.28125,0;1,0.265625,0;1,0.25,0;1,0.234375,0;1,0.21875,0;1,0.203125,0;1,0.1875,0;1,0.171875,0;1,0.15625,0;1,0.140625,0;1,0.125,0;1,0.109375,0;1,0.09375,0;1,0.078125,0;1,0.0625,0;1,0.046875,0;1,0.03125,0;1,0.015625,0;1,0,0;0.984375,0,0;0.96875,0,0;0.953125,0,0;0.9375,0,0;0.921875,0,0;0.90625,0,0;0.890625,0,0;0.875,0,0;0.859375,0,0;0.84375,0,0;0.828125,0,0;0.8125,0,0;0.796875,0,0;0.78125,0,0;0.765625,0,0;0.75,0,0;0.734375,0,0;0.71875,0,0;0.703125,0,0;0.6875,0,0;0.671875,0,0;0.65625,0,0;0.640625,0,0;0.625,0,0;0.609375,0,0;0.59375,0,0;0.578125,0,0;0.5625,0,0;0.546875,0,0;0.53125,0,0;0.515625,0,0;1,1,1];
+colormap(tuxedojet);
 end
 
 function [ssas,f] = findSSAS(signal,time,sf)
@@ -638,16 +636,22 @@ function [outpks] = processPeaks(s,inpks,sts)
 pstat1 = cell(1,length(sts));
 [pstat1{:}] = sts.numberOfPeaks;
 pstat1 = cell2mat(pstat1);
+pstat1 = smooth(pstat1,3);
 pstat2 = cell(1,length(sts));
 [pstat2{:}] = sts.meanCfsOfPeaks;
 pstat2 = cell2mat(pstat2);
+pstat2 = smooth(pstat2,3);
 pstat3 = cell(1,length(sts));
 [pstat3{:}] = sts.peakEnrichment;
 pstat3 = cell2mat(pstat3);
-pstat4 = pstat1.*pstat2.*pstat3;
+pstat3 = smooth(pstat3,3);
+pstat4 = cell(1,length(sts));
+[pstat4{:}] = sts.meanRidgeLength;
+pstat4 = cell2mat(pstat4);
 pstat4 = smooth(pstat4,3);
-[~,ind] = max(pstat4);
-thresh = 0.4*pstat2(ind);
+pstat5 = pstat1.*pstat2.*pstat3.*pstat4;
+[~,ind] = max(pstat5);
+thresh = 0.3*pstat2(ind)*pstat4(ind);
 
 %Separate high frequency peaks from the rest of the peaks.
 outpks = inpks;
@@ -657,7 +661,7 @@ outpks(end).type = [];
 %type = 2 is signal
 %type = 3 is low frequency noise
 for i=1:length(inpks)
-    if inpks(i).waveletcfs < thresh
+    if inpks(i).waveletcfs*inpks(i).ridgelength < thresh
         outpks(i).type = 1;
     else
         outpks(i).type = 0;
