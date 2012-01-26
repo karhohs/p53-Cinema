@@ -299,6 +299,7 @@ for i=length(peak_candidates):-1:1
         peak_elected(i) = [];
     end
 end
+%Weed out unqualified peaks and peaks of questionable nature. 
 %If a peak has a negative wavelet coefficient value it is disqualified and
 %if a peak is the first or last point of data it is disqualified.
 for i=length(peak_elected):-1:1
@@ -310,12 +311,25 @@ for i=length(peak_elected):-1:1
         peak_elected(i) = [];
     end
 end
+%If a peak is less than 5% of the mean it is disqualified. This is mainly
+%to eliminate peaks that are very near to zero in the first few scales.
+x2 = x(peak_elected);
+thresh = .05*mean(x2);
+for i=length(peak_elected):-1:1
+    if x(peak_elected(i))<thresh
+        peak_elected(i) = [];
+    end
+end
+%Iterate twice
+x2 = x(peak_elected);
+thresh = .05*mean(x2);
+for i=length(peak_elected):-1:1
+    if x(peak_elected(i))<thresh
+        peak_elected(i) = [];
+    end
+end
 
 out = peak_elected;
-
-%Weed out unqualified peaks and peaks of questionable nature. If has not
-%already been done.
-
 end
 
 function [my_fig]=plot_peaks(peak_index,x)
