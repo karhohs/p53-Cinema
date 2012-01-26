@@ -111,7 +111,7 @@ plen = cell2mat(plen);
 palltogether = [ptime',pscl',pcfs',plen'];
 palltogether = sortrows(palltogether,1);
 %</DEBUG>
-%rapid_report(waveval,-wavMexh.cfs,ridgval.map,t,s)
+rapid_report(waveval,-wavMexh.cfs,ridgval.map,t,s)
 plotPeaksAndValleys(s,pks,vly)
 end
 
@@ -215,7 +215,7 @@ for i=size(in.cfs,1):-1:(gap_limit+1)
                             end
                         end
                     end
-                    if sum(wavelet_peaks_alias{i-h}==wavelet_peaks_alias{i}(j))==0
+                    if (sum(wavelet_peaks_alias{i-h}==wavelet_peaks_alias{i}(j))==0) && (k_min<=k)
                         ridge_map(i-h,wavelet_peaks{i-h}(k_min)) = wavelet_peaks_alias{i}(j);
                         wavelet_peaks_alias{i-h}(k_min) = wavelet_peaks_alias{i}(j);
                     end
