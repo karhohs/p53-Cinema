@@ -64,14 +64,18 @@ else
 end
 
 %Find the ridgemap for peak detection using the continuous wavelet
-%transform.
-[ridgpks,wavpeaks] = findRidgeMap(wavMexh);
+%transform. The signal is given to the findRidgeMap to use as a threshold.
+[ridgpks,wavpeaks] = findRidgeMap(wavMexh,s);
+if isempty(ridgpks.scl)
+    disp('There are no peaks in this waveform')
+    return
+end
 %opportunity here to prune ridges by length
 [protopks,pkSclStats] = processRidgeMap(ridgpks,wavMexh.scl,wavMexh.phz,length(s));
 %Repeat ridge mapping for valleys and switches
 temp = wavMexh;
 temp.cfs = -temp.cfs;
-[ridgval,waveval] = findRidgeMap(temp);
+[ridgval,waveval] = findRidgeMap(temp,s);
 [protoval,valSclStats] = processRidgeMap(ridgval,wavMexh.scl,wavMexh.phz,length(s));
 beautifyRidgeMap(ridgpks.map,ridgval.map,wavMexh.cfs);
 %The peaks of every ridge represent a candidate peak from the original
@@ -108,7 +112,10 @@ pcfs = cell2mat(pcfs);
 plen = cell(1,length(protopks));
 [plen{:}] = protopks.ridgelength;
 plen = cell2mat(plen);
-palltogether = [ptime',pscl',pcfs',plen'];
+ptype = cell(1,length(pks));
+[ptype{:}] = pks.type;
+ptype = cell2mat(ptype);
+palltogether = [ptime',pscl',pcfs',plen',ptype'];
 palltogether = sortrows(palltogether,1);
 %</DEBUG>
 rapid_report(waveval,-wavMexh.cfs,ridgval.map,t,s)
@@ -150,7 +157,7 @@ tukey33=tukeywin(length(s),0.33)';
 s = s.*tukey33;
 end
 
-function [out,wavelet_peaks] = findRidgeMap(in)
+function [out,wavelet_peaks] = findRidgeMap(in,s)
 %Input:
 %in: the CWT structure from the custom cwtft function in this file
 %
@@ -165,9 +172,16 @@ function [out,wavelet_peaks] = findRidgeMap(in)
 %of the ridge.
 %out.map: the ridge map, which is the same size of the wavelet transform
 wavelet_peaks = cell(size(in.cfs,1),1);
+%find smoothened signal
+L = length(s);
+s = s(1:round(L/10):end);
+L2 = length(s);
+s = smooth(s);
+s = 0.01*interp1q((0:L2-1)',s,(0:(L2-1)/(L-1):L2-1)'); % 1% of the mean signal is the cutoff for meaningful peaks;
+%find peaks at each scale
 for i=1:size(in.cfs,1)
     wavelet_peaks{i} = first_pass_peak_detection(...
-        in.cfs(i,:),in.scl(i)*2+1); %The window size was heursitically chosen to be (2*current_scale+1)
+        in.cfs(i,:),in.scl(i)*2+1,s); %The window size was heursitically chosen to be (2*current_scale+1)
 end
 %-- Identify the Ridges --
 ridge_map = zeros(size(in.cfs));
@@ -254,7 +268,7 @@ for i=1:ridge_counter
 end
 end
 
-function [out]=first_pass_peak_detection(x,winw_size)
+function [out]=first_pass_peak_detection(x,winw_size,s)
 %There are many ways to find peaks. The wavelet method is powerful at
 %detecting peaks but is actually dependent on simpler peak detection
 %methods.
@@ -311,20 +325,11 @@ for i=length(peak_elected):-1:1
         peak_elected(i) = [];
     end
 end
-%If a peak is less than 5% of the mean it is disqualified. This is mainly
-%to eliminate peaks that are very near to zero in the first few scales.
-x2 = x(peak_elected);
-thresh = .05*mean(x2);
+%If a peak is less than the value of the 1% smoothened signal destroy its
+%very existence. This is mainly to eliminate peaks that are very near to
+%zero in the first few scales. 
 for i=length(peak_elected):-1:1
-    if x(peak_elected(i))<thresh
-        peak_elected(i) = [];
-    end
-end
-%Iterate twice
-x2 = x(peak_elected);
-thresh = .05*mean(x2);
-for i=length(peak_elected):-1:1
-    if x(peak_elected(i))<thresh
+    if x(peak_elected(i))<s(peak_elected(i))
         peak_elected(i) = [];
     end
 end
@@ -665,7 +670,7 @@ pstat4 = cell2mat(pstat4);
 pstat4 = smooth(pstat4,3);
 pstat5 = pstat1.*pstat2.*pstat3.*pstat4;
 [~,ind] = max(pstat5);
-thresh = 0.3*pstat2(ind)*pstat4(ind);
+thresh = 0.2*pstat2(ind)*pstat4(ind);
 
 %Separate high frequency peaks from the rest of the peaks.
 outpks = inpks;
