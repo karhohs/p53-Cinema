@@ -78,6 +78,26 @@ temp.cfs = -temp.cfs;
 [ridgval,waveval] = findRidgeMap(temp,s);
 [protoval,valSclStats] = processRidgeMap(ridgval,wavMexh.scl,wavMexh.phz,length(s));
 beautifyRidgeMap(ridgpks.map,ridgval.map,wavMexh.cfs);
+
+%switches
+[ridgeSwitchPks,waveSwitchPks] = findRidgeMap(wavDog1,s);
+[protoSwitchPks,pkSwitchSclStats] = processRidgeMap(ridgeSwitchPks,wavDog1.scl,wavDog1.phz,length(s));
+
+%%%%%%%%%%%%%%
+ptime = cell(1,length(protoSwitchPks));
+[ptime{:}] = protoSwitchPks.time;
+ptime = cell2mat(ptime);
+psclind = cell(1,length(protoSwitchPks));
+[psclind{:}] = protoSwitchPks.scaleindex;
+psclind = cell2mat(psclind);
+palltogether = [ptime',psclind'];
+newmap = zeros(size(ridgpks.map));
+for i=1:length(palltogether)
+    j = palltogether(i,2);
+    k = palltogether(i,1);
+    newmap(j,k) = 1;
+end
+beautifyRidgeMap(ridgeSwitchPks.map,newmap,wavDog1.cfs);
 %The peaks of every ridge represent a candidate peak from the original
 %waveform. The ridge peak contains both positional and scale information.
 %Selective criteria based upon the scale can be used to sift through noise
@@ -106,6 +126,9 @@ ptime = cell2mat(ptime);
 pscl = cell(1,length(protopks));
 [pscl{:}] = protopks.scale;
 pscl = cell2mat(pscl);
+psclind = cell(1,length(protopks));
+[psclind{:}] = protopks.scaleindex;
+psclind = cell2mat(psclind);
 pcfs = cell(1,length(protopks));
 [pcfs{:}] = protopks.waveletcfs;
 pcfs = cell2mat(pcfs);
@@ -115,8 +138,15 @@ plen = cell2mat(plen);
 ptype = cell(1,length(pks));
 [ptype{:}] = pks.type;
 ptype = cell2mat(ptype);
-palltogether = [ptime',pscl',pcfs',plen',ptype'];
+palltogether = [ptime',pscl',pcfs',plen',ptype',psclind'];
 palltogether = sortrows(palltogether,1);
+newmap = zeros(size(ridgpks.map));
+for i=1:length(palltogether)
+    j = palltogether(i,6);
+    k = palltogether(i,1);
+    newmap(j,k) = 1;
+end
+beautifyRidgeMap(ridgpks.map,newmap,wavMexh.cfs);
 %</DEBUG>
 rapid_report(waveval,-wavMexh.cfs,ridgval.map,t,s)
 plotPeaksAndValleys(s,pks,vly)
@@ -256,10 +286,12 @@ for i=1:ridge_counter
         if any(temp)
             if isempty(out.scl{i})
                 out.scl{i}(1) = in.scl(j);
+                out.sclind{i}(1) = j;
                 out.t{i}(1) = wavelet_peaks{j}(temp);
                 out.cfs{i}(1) = in.cfs(j,out.t{i}(1));
             else
                 out.scl{i}(end+1)=in.scl(j);
+                out.sclind{i}(end+1) = j;
                 out.t{i}(end+1) = wavelet_peaks{j}(temp);
                 out.cfs{i}(end+1) = in.cfs(j,out.t{i}(end));
             end
@@ -512,6 +544,7 @@ function [out,scale_stats] = processRidgeMap(in,scales,pseudoHz,len_sig)
 %than 1000 peaks)
 out(1000).time = [];
 out(1000).scale = [];
+out(1000).scaleindex = [];
 out(1000).waveletcfs = [];
 out(1000).ridgelength = [];
 %Pre-allocate scale_stats
@@ -536,12 +569,26 @@ for i=1:length(in.cfs)
     peak_index = find(~peak_index);
     temp_max = -inf;
     if ~isempty(peak_index)
-        for j=1:length(peak_index)
+        L = length(peak_index);
+        for j=1:L
             out(ind).time = in.t{i}(peak_index(j));
             out(ind).scale = in.scl{i}(peak_index(j));
+            out(ind).scaleindex = in.sclind{i}(peak_index(j));
             scale_stats(indArray(scales == out(ind).scale)).peakIdentity(end+1) = ind;
             out(ind).waveletcfs = in.cfs{i}(peak_index(j));
+            
+            if L>1
+                switch(j)
+                    case 1
+                        out(ind).ridgelength = peak_index(j) + round(abs(peak_index(j+1)-peak_index(j))/2);
+                    case L
+                        out(ind).ridgelength = (length(in.cfs{i})-peak_index(j)) + round(abs(peak_index(j)-peak_index(j-1))/2);
+                    otherwise
+                        out(ind).ridgelength = round(abs(peak_index(j+1)-peak_index(j))/2) + round(abs(peak_index(j)-peak_index(j-1))/2);
+                end
+            else
             out(ind).ridgelength = length(in.cfs{i});
+            end
             if temp_max < in.cfs{i}(peak_index(j))
                 temp_max = in.cfs{i}(peak_index(j));
             end
@@ -552,6 +599,7 @@ for i=1:length(in.cfs)
             out(ind).ridgelength = length(in.cfs{i});
             out(ind).time = in.t{i}(ind2);
             out(ind).scale = in.scl{i}(ind2);
+            out(ind).scaleindex = in.sclind{i}(ind2);
             scale_stats(indArray(scales == out(ind).scale)).peakIdentity(end+1) = ind;
             ind = ind+1;
         end
@@ -560,6 +608,7 @@ for i=1:length(in.cfs)
         out(ind).ridgelength = length(in.cfs{i});
         out(ind).time = in.t{i}(ind2);
         out(ind).scale = in.scl{i}(ind2);
+        out(ind).scaleindex = in.sclind{i}(ind2);
         scale_stats(indArray(scales == out(ind).scale)).peakIdentity(end+1) = ind;
         ind = ind+1;
     end
