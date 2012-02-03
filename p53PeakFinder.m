@@ -99,6 +99,14 @@ for i=1:length(palltogether)
     newmap(j,k) = 1;
 end
 beautifyRidgeMap(ridgeSwitchPks.map,newmap,wavDog1.cfs);
+for i=1:length(palltogether)
+    j = palltogether(i,2);
+    k = palltogether(i,1);
+    newmap(j,k) = i;
+end
+penguinjet;
+figure
+imagesc(newmap);
 %The peaks of every ridge represent a candidate peak from the original
 %waveform. The ridge peak contains both positional and scale information.
 %Selective criteria based upon the scale can be used to sift through noise
