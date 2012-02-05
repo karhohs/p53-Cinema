@@ -104,9 +104,10 @@ for i=1:length(palltogether)
     k = palltogether(i,1);
     newmap(j,k) = i;
 end
-penguinjet;
+
 figure
 imagesc(newmap);
+penguinjet;
 %The peaks of every ridge represent a candidate peak from the original
 %waveform. The ridge peak contains both positional and scale information.
 %Selective criteria based upon the scale can be used to sift through noise
@@ -700,9 +701,11 @@ end
 
 function [outpks] = processPeaks(s,inpks,sts)
 %initialize outpks
-outpks = inpks;
 %Order the peak set first by scale and 2nd by time in ascending order. All
 %peaks are given the same label of "type 0".
+%type 1: high frequency noise
+%type 2: signal
+%type 3: low frequency noise
 disp('here I am')
 
 Lp=length(inpks);
