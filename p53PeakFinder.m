@@ -724,9 +724,9 @@ for i=1:length(unique_scales)
     temp2 = sortrows(temp2,1);
     palltogether(temp1,:) = temp2;
 end
-%order the outpks
+%initialize the outpks
 outpks = inpks(palltogether(:,3));
-%the the type of all peaks to 0
+%set the type of all peaks to 0
 outpks(end).type = [];
 temp = zeros(1,Lp);
 temp = num2cell(temp);
@@ -738,19 +738,22 @@ for i=1:Lp
     k = outpks(i).time;
     peakmap(j,k) = i;
 end
-penguinjet;
+figure
 imagesc(peakmap)
+penguinjet;
 %starting with the lowest and earliest peak search for nearby peaks in the
 %area of a cone of influence
+Lsc = length(sts);
+stsScl = 2*[sts(:).scale]; %The scale determines the size of the window of time
 for i=1:Lp
-    coi = zeros(Lp,2);
-    stsScl = [sts(:).scale];
+    coi = zeros(Lsc,2);
     coi(:,1) = outpks(i).time - stsScl; %Left time point
     coi(:,2) = outpks(i).time + stsScl; %Right time point
     coi(coi<1) = 1;
     coi(coi>Ls) = Ls;
-    flag1 = false;
-    for j=outpks(i).scaleindex:Lp
+    stat0 = outpks(i).ridgelength*outpks(i).waveletcfs;
+    flag1 = false; %flag1 ensures that the peak comparison stops once a "greater" peak is found.
+    for j=outpks(i).scaleindex+1:Lsc
         if flag1
             break;
         end
@@ -760,22 +763,17 @@ for i=1:Lp
             case 0
                 %do nothing
             case 1
-                flag2 = true;
-                k = 1;
-                while flag2
+                for k=1:length(temp)
                     if temp(k) ~= 0
-                        stat0 = outpks(i).ridgelength*outpks(i).waveletcfs;
                         stat1 = outpks(temp(k)).ridgelength*outpks(temp(k)).waveletcfs;
                         if stat0<stat1
                             if outpks(i).type == 0
                                 outpks(i).type = 1;
                             end
-                            outpks(temp(k)).type = outpks(i).type + 1;
                             flag1 = true;
                         end
                         break;
                     end
-                    k = k+1;
                 end
             otherwise
                 coiDist = -inf;
@@ -789,21 +787,178 @@ for i=1:Lp
                         end
                     end
                 end
-                stat0 = outpks(i).ridgelength*outpks(i).waveletcfs;
                 stat1 = outpks(temp(ind)).ridgelength*outpks(temp(ind)).waveletcfs;
                 if stat0<stat1
                     if outpks(i).type == 0
                         outpks(i).type = 1;
                     end
-                    outpks(temp(ind)).type = outpks(i).type + 1;
+                    flag1 = true;
+                end
+        end
+    end
+    if ~flag1
+        outpks(i).type = 2;
+    end
+end
+%create a peak map
+peakmap2 = zeros(length(sts),length(s));
+for i=1:Lp
+    j = outpks(i).scaleindex;
+    k = outpks(i).time;
+    peakmap2(j,k) = outpks(i).type;
+end
+figure
+imagesc(peakmap2)
+%Now scan all the type 2 peaks from the highest scale to the lowest. Look
+%at the peaks in the lower scale in a block the width of the scale of the
+%current peak. If there are any peaks below the current peak that is
+%"greater" than the current peak becomes type 3.
+%
+%create a type 2 peak map
+type2map = zeros(length(sts),length(s));
+for i=1:Lp
+    if outpks(i).type == 2
+        j = outpks(i).scaleindex;
+        k = outpks(i).time;
+        type2map(j,k) = i;
+    end
+end
+%low frequency noise threshold: when two peaks occur very close together,
+%their troughs will overlap. Think of two PSFs close to each other. To
+%weight lower frequency peaks against this a threshold is used.
+lfthresh = 1.5;
+
+%isolate only type 2 peaks
+temp = [outpks(:).type];
+typeIndex = (1:Lp)';
+temp = temp == 2;
+typeIndex = typeIndex(temp)';
+typeIndex = fliplr(typeIndex);
+for i = typeIndex
+    blk = zeros(Lsc,2); %The block of time to search for peaks in
+    stsScl = outpks(i).scale; %The scale determines the size of the window of time
+    blk(:,1) = outpks(i).time - stsScl; %Left time point
+    blk(:,2) = outpks(i).time + stsScl; %Right time point
+    blk(blk<1) = 1;
+    blk(blk>Ls) = Ls;
+    stat0 = outpks(i).ridgelength*outpks(i).waveletcfs;
+    flag1 = false; %flag1 ensures that the peak comparison stops once a "greater" peak is found.
+    for j=outpks(i).scaleindex-1:-1:1
+        if flag1
+            break;
+        end
+        temp = type2map(j,blk(j,1):blk(j,2));
+        temp_cnt = sum(any(temp));
+        switch(temp_cnt)
+            case 0
+                %do nothing
+            case 1
+                for k=1:length(temp)
+                    if temp(k) ~= 0
+                        stat1 = lfthresh*outpks(temp(k)).ridgelength*outpks(temp(k)).waveletcfs;
+                        if stat0<stat1
+                            
+                            outpks(i).type = 3;
+                            
+                            flag1 = true;
+                        end
+                        break;
+                    end
+                end
+            otherwise
+                for k=1:length(temp)
+                    if temp(k) ~= 0
+                        stat1 = lfthresh*outpks(temp(k)).ridgelength*outpks(temp(k)).waveletcfs;
+                        if stat0<stat1
+                            outpks(i).type = 3;
+                            flag1 = true;
+                        end
+                        break;
+                    end
+                end
+        end
+    end
+end
+%create a peak map
+peakmap2 = zeros(length(sts),length(s));
+for i=1:Lp
+    j = outpks(i).scaleindex;
+    k = outpks(i).time;
+    peakmap2(j,k) = outpks(i).type;
+end
+figure
+imagesc(peakmap2)
+%Now revisit all the type 1 peaks and scan for the peaks in their cone of
+%influence again. If the "greater" peak that made the current peak type 1
+%in the first round is type 3, then make the current peak type 2.
+
+%isolate only type 1 peaks
+temp = [outpks(:).type];
+typeIndex = (1:Lp)';
+temp = temp == 1;
+typeIndex = typeIndex(temp)';
+stsScl = 2*[sts(:).scale]; %The scale determines the size of the window of time
+for i=typeIndex
+    coi = zeros(Lsc,2);
+    coi(:,1) = outpks(i).time - stsScl; %Left time point
+    coi(:,2) = outpks(i).time + stsScl; %Right time point
+    coi(coi<1) = 1;
+    coi(coi>Ls) = Ls;
+    stat0 = outpks(i).ridgelength*outpks(i).waveletcfs;
+    flag1 = false; %flag1 ensures that the peak comparison stops once a "greater" peak is found.
+    for j=outpks(i).scaleindex+1:Lsc
+        if flag1
+            break;
+        end
+        temp = peakmap(j,coi(j,1):coi(j,2));
+        temp_cnt = sum(any(temp));
+        switch(temp_cnt)
+            case 0
+                %do nothing
+            case 1
+                for k=1:length(temp)
+                    if temp(k) ~= 0
+                        stat1 = outpks(temp(k)).ridgelength*outpks(temp(k)).waveletcfs;
+                        if stat0<stat1
+                            if outpks(temp(k)).type == 3
+                                outpks(i).type = 2;
+                            end
+                            flag1 = true;
+                        end
+                        break;
+                    end
+                end
+            otherwise
+                coiDist = -inf;
+                ind = 0;
+                for k=1:length(temp)
+                    if temp(k) ~= 0
+                        tempDist = abs(outpks(i).time - outpks(temp(k)).time);
+                        if tempDist > coiDist
+                            ind = k;
+                            coiDist = tempDist;
+                        end
+                    end
+                end
+                stat1 = outpks(temp(ind)).ridgelength*outpks(temp(ind)).waveletcfs;
+                if stat0<stat1
+                    if outpks(temp(k)).type == 3
+                                outpks(i).type = 2;
+                            end
                     flag1 = true;
                 end
         end
     end
 end
-
-%For every peak that is still of type 0, identify their type by clustering.
-%  
+%create a peak map
+peakmap2 = zeros(length(sts),length(s));
+for i=1:Lp
+    j = outpks(i).scaleindex;
+    k = outpks(i).time;
+    peakmap2(j,k) = outpks(i).type;
+end
+figure
+imagesc(peakmap2)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 %
@@ -923,6 +1078,8 @@ end
 %         end
 %     end
 % end
+figure
+plot(s)
 end
 
 function [] = plotPeaksAndValleys(s,pks,vly)
