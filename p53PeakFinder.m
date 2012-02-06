@@ -741,10 +741,13 @@ end
 figure
 imagesc(peakmap)
 penguinjet;
+%initialize the matchup matrix that keeps track of the pair of peaks where
+%the current peak is less than the "greater" peak.
+matchup = zeros(Lp,1);
 %starting with the lowest and earliest peak search for nearby peaks in the
 %area of a cone of influence
 Lsc = length(sts);
-stsScl = 2*[sts(:).scale]; %The scale determines the size of the window of time
+stsScl = round(2.5*[sts(:).scale]); %The scale determines the size of the window of time
 for i=1:Lp
     coi = zeros(Lsc,2);
     coi(:,1) = outpks(i).time - stsScl; %Left time point
@@ -770,6 +773,7 @@ for i=1:Lp
                             if outpks(i).type == 0
                                 outpks(i).type = 1;
                             end
+                            matchup(i) = temp(k);
                             flag1 = true;
                         end
                         break;
@@ -792,6 +796,7 @@ for i=1:Lp
                     if outpks(i).type == 0
                         outpks(i).type = 1;
                     end
+                    matchup(i) = temp(k);
                     flag1 = true;
                 end
         end
@@ -814,20 +819,10 @@ imagesc(peakmap2)
 %current peak. If there are any peaks below the current peak that is
 %"greater" than the current peak becomes type 3.
 %
-%create a type 2 peak map
-type2map = zeros(length(sts),length(s));
-for i=1:Lp
-    if outpks(i).type == 2
-        j = outpks(i).scaleindex;
-        k = outpks(i).time;
-        type2map(j,k) = i;
-    end
-end
 %low frequency noise threshold: when two peaks occur very close together,
 %their troughs will overlap. Think of two PSFs close to each other. To
 %weight lower frequency peaks against this a threshold is used.
-lfthresh = 1.5;
-
+lfthresh = 1.25;
 %isolate only type 2 peaks
 temp = [outpks(:).type];
 typeIndex = (1:Lp)';
@@ -835,10 +830,10 @@ temp = temp == 2;
 typeIndex = typeIndex(temp)';
 typeIndex = fliplr(typeIndex);
 for i = typeIndex
-    blk = zeros(Lsc,2); %The block of time to search for peaks in
+    blk = zeros(1,2); %The block of time to search for peaks in
     stsScl = outpks(i).scale; %The scale determines the size of the window of time
-    blk(:,1) = outpks(i).time - stsScl; %Left time point
-    blk(:,2) = outpks(i).time + stsScl; %Right time point
+    blk(1) = outpks(i).time - stsScl; %Left time point
+    blk(2) = outpks(i).time + stsScl; %Right time point
     blk(blk<1) = 1;
     blk(blk>Ls) = Ls;
     stat0 = outpks(i).ridgelength*outpks(i).waveletcfs;
@@ -847,7 +842,7 @@ for i = typeIndex
         if flag1
             break;
         end
-        temp = type2map(j,blk(j,1):blk(j,2));
+        temp = peakmap(j,blk(1):blk(2));
         temp_cnt = sum(any(temp));
         switch(temp_cnt)
             case 0
@@ -857,9 +852,7 @@ for i = typeIndex
                     if temp(k) ~= 0
                         stat1 = lfthresh*outpks(temp(k)).ridgelength*outpks(temp(k)).waveletcfs;
                         if stat0<stat1
-                            
                             outpks(i).type = 3;
-                            
                             flag1 = true;
                         end
                         break;
@@ -897,57 +890,9 @@ temp = [outpks(:).type];
 typeIndex = (1:Lp)';
 temp = temp == 1;
 typeIndex = typeIndex(temp)';
-stsScl = 2*[sts(:).scale]; %The scale determines the size of the window of time
 for i=typeIndex
-    coi = zeros(Lsc,2);
-    coi(:,1) = outpks(i).time - stsScl; %Left time point
-    coi(:,2) = outpks(i).time + stsScl; %Right time point
-    coi(coi<1) = 1;
-    coi(coi>Ls) = Ls;
-    stat0 = outpks(i).ridgelength*outpks(i).waveletcfs;
-    flag1 = false; %flag1 ensures that the peak comparison stops once a "greater" peak is found.
-    for j=outpks(i).scaleindex+1:Lsc
-        if flag1
-            break;
-        end
-        temp = peakmap(j,coi(j,1):coi(j,2));
-        temp_cnt = sum(any(temp));
-        switch(temp_cnt)
-            case 0
-                %do nothing
-            case 1
-                for k=1:length(temp)
-                    if temp(k) ~= 0
-                        stat1 = outpks(temp(k)).ridgelength*outpks(temp(k)).waveletcfs;
-                        if stat0<stat1
-                            if outpks(temp(k)).type == 3
-                                outpks(i).type = 2;
-                            end
-                            flag1 = true;
-                        end
-                        break;
-                    end
-                end
-            otherwise
-                coiDist = -inf;
-                ind = 0;
-                for k=1:length(temp)
-                    if temp(k) ~= 0
-                        tempDist = abs(outpks(i).time - outpks(temp(k)).time);
-                        if tempDist > coiDist
-                            ind = k;
-                            coiDist = tempDist;
-                        end
-                    end
-                end
-                stat1 = outpks(temp(ind)).ridgelength*outpks(temp(ind)).waveletcfs;
-                if stat0<stat1
-                    if outpks(temp(k)).type == 3
-                                outpks(i).type = 2;
-                            end
-                    flag1 = true;
-                end
-        end
+    if outpks(matchup(i)).type == 3
+        outpks(i).type = 2;
     end
 end
 %create a peak map
@@ -959,127 +904,43 @@ for i=1:Lp
 end
 figure
 imagesc(peakmap2)
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-%
-% %Here is a recipe for determing a threshold that defines high frequency
-% %noise. First create a statistic for each scale that is the product of the
-% %number of peaks, the average wavelet coefficient of a peak, and the peak
-% %enrichment value. Then smooth this statistic to favor the signal being
-% %present across multiple scales. Then find the maximum of this statisitic.
-% %This represents the scale that contains the signal. A threshold cutoff for
-% %high frequency noise is then defined as 20% of the mean peak value at the
-% %scale with signal.
-% pstat1 = cell(1,length(sts));
-% [pstat1{:}] = sts.numberOfPeaks;
-% pstat1 = cell2mat(pstat1);
-% pstat1 = smooth(pstat1,3);
-% pstat2 = cell(1,length(sts));
-% [pstat2{:}] = sts.meanCfsOfPeaks;
-% pstat2 = cell2mat(pstat2);
-% pstat2 = smooth(pstat2,3);
-% pstat3 = cell(1,length(sts));
-% [pstat3{:}] = sts.peakEnrichment;
-% pstat3 = cell2mat(pstat3);
-% pstat3 = smooth(pstat3,3);
-% pstat4 = cell(1,length(sts));
-% [pstat4{:}] = sts.meanRidgeLength;
-% pstat4 = cell2mat(pstat4);
-% pstat4 = smooth(pstat4,3);
-% pstat5 = pstat1.*pstat2.*pstat3.*pstat4;
-% [~,ind] = max(pstat5);
-% thresh = 0.2*pstat2(ind)*pstat4(ind);
-%
-% %Separate high frequency peaks from the rest of the peaks.
-% outpks = inpks;
-% outpks(end).type = [];
-% %type = 0 is temporarily undefined
-% %type = 1 is high frequency noise
-% %type = 2 is signal
-% %type = 3 is low frequency noise
-% for i=1:length(inpks)
-%     if inpks(i).waveletcfs*inpks(i).ridgelength < thresh
-%         outpks(i).type = 1;
-%     else
-%         outpks(i).type = 0;
-%     end
-% end
-%
-% %Signal peaks are identified by scanning the peaks by their scale in
-% %ascending order. A peak at a given scale will be compared to the peak
-% %value of the signal in a window of size proportional to scale. If another
-% %peak is found in this window then the peak is classified as low frequency
-% %noise. If another peak is not found, then the peak is adjusted to the
-% %highest point on the signal and classified as signal.
-%
-% ptime = cell(1,length(inpks));
-% [ptime{:}] = inpks.time;
-% ptime = cell2mat(ptime);
-% pscl = cell(1,length(inpks));
-% [pscl{:}] = inpks.scale;
-% pscl = cell2mat(pscl);
-% [timeSorted,timeIndex] = sortrows(ptime',1);
-% L=length(timeSorted);
-% temp = (1:L)';
-% temp = [temp,timeIndex];
-% temp = sortrows(temp,2);
-% timeIndex = temp(:,1);
-% [~,scaleIndex] = sortrows(pscl',1);
-% palltogether = [ptime',pscl',timeIndex];
-% peakFillMap = zeros(size(timeSorted));
-% for i=1:L
-%     indS = scaleIndex(i);
-%     if outpks(indS).type == 0
-%         %scan for peaks left
-%         indT = palltogether(indS,3);
-%         indTLeft = palltogether(indS,3);
-%         indTRight = palltogether(indS,3);
-%         time = palltogether(indS,1);
-%         window = 2*palltogether(indS,2);
-%         flag = true;
-%         while (indTLeft>1) && flag
-%             temp = timeSorted(indTLeft,1);
-%             if abs(temp-time)<= window
-%                 indTLeft = indTLeft - 1;
-%             else
-%                 flag = false;
-%                 indTLeft = indTLeft + 1;
-%             end
-%         end
-%         flag = true;
-%         while (indTRight<L) && flag
-%             temp = timeSorted(indTRight,1);
-%             if abs(temp-time)<= window
-%                 indTRight = indTRight + 1;
-%             else
-%                 flag = false;
-%                 indTRight = indTRight - 1;
-%             end
-%         end
-%         if any(peakFillMap(indTLeft:indTRight))
-%             peakFillMap(indT) = 1;
-%             outpks(indS).type = 3;
-%         else
-%             peakFillMap(indT) = 1;
-%             indL = time-window;
-%             if indL <= 0
-%                 indL = 1;
-%             end
-%             indR = time+window;
-%             Ls = length(s);
-%             if indR > Ls
-%                 indR = Ls;
-%             end
-%             [max_s,ind] = max(s(indL:indR));
-%             ind = ind + indL - 1;
-%             outpks(indS).type = 2;
-%             outpks(indS).time = ind;
-%             outpks(indS).value = abs(max_s);
-%         end
-%     end
-% end
+%the signal peaks are adjusted to the highest nearby point on the signal.
+%isolate only type 2 peaks
+temp = [outpks(:).type];
+typeIndex = (1:Lp)';
+temp = temp == 2;
+typeIndex = typeIndex(temp)';
+typeIndex = fliplr(typeIndex);
+for i = typeIndex
+    time = outpks(i).time;
+    window = outpks(i).scale;
+    indL = time-window;
+    if indL <= 0
+        indL = 1;
+    end
+    indR = time+window;
+    if indR > Ls
+        indR = Ls;
+    end
+    [max_s,ind] = max(s(indL:indR));
+    ind = ind + indL - 1;
+    outpks(i).time = ind;
+    outpks(i).value = max_s;
+end
+%plot peaks
 figure
 plot(s)
+hold on
+%Show signal peaks
+temp1 = zeros(Ls,1);
+temp2 = zeros(Ls,1);
+for i=typeIndex
+        temp1(i) = outpks(i).time;
+        temp2(i) = outpks(i).value;
+end
+peak_index = temp1(temp1>0);
+peak_value = temp2(temp2>0);
+scatter(peak_index,peak_value,'filled','MarkerFaceColor','red');
 end
 
 function [] = plotPeaksAndValleys(s,pks,vly)
