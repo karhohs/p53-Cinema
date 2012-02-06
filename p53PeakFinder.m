@@ -747,7 +747,7 @@ matchup = zeros(Lp,1);
 %starting with the lowest and earliest peak search for nearby peaks in the
 %area of a cone of influence
 Lsc = length(sts);
-stsScl = round(2.5*[sts(:).scale]); %The scale determines the size of the window of time
+stsScl = 2*[sts(:).scale]; %The scale determines the size of the window of time
 for i=1:Lp
     coi = zeros(Lsc,2);
     coi(:,1) = outpks(i).time - stsScl; %Left time point
@@ -895,17 +895,10 @@ for i=typeIndex
         outpks(i).type = 2;
     end
 end
-%create a peak map
-peakmap2 = zeros(length(sts),length(s));
-for i=1:Lp
-    j = outpks(i).scaleindex;
-    k = outpks(i).time;
-    peakmap2(j,k) = outpks(i).type;
-end
-figure
-imagesc(peakmap2)
+
 %the signal peaks are adjusted to the highest nearby point on the signal.
-%isolate only type 2 peaks
+%isolate only type 2 peaks. If the type 2 peak is not a true peak. Convert
+%it to type 1.
 temp = [outpks(:).type];
 typeIndex = (1:Lp)';
 temp = temp == 2;
@@ -923,20 +916,59 @@ for i = typeIndex
         indR = Ls;
     end
     [max_s,ind] = max(s(indL:indR));
-    ind = ind + indL - 1;
-    outpks(i).time = ind;
-    outpks(i).value = max_s;
+    if (ind == 1) || (ind == (indR-indL+1))
+        outpks(i).type = 1;
+    else
+        ind = ind + indL - 1;
+        outpks(i).time = ind;
+        outpks(i).value = max_s;
+    end
 end
+
+%Use median absolute deviation to identify outliers and relabel them as
+%type 1.
+temp = [outpks(:).type];
+typeIndex = (1:Lp)';
+temp = temp == 2;
+typeIndex = typeIndex(temp)';
+%create a vector of the test statistic: waveletcoef*ridgelength
+testStat = [outpks(typeIndex).waveletcfs].*[outpks(typeIndex).ridgelength];
+%take the log because the test stat is always >= 0.
+testStat = log(testStat);
+medianTestStat = median(testStat);
+adTestStat = testStat-medianTestStat;
+signTestStat = adTestStat < 0;
+adTestStat = abs(adTestStat);
+madTestStat = median(adTestStat);
+radTestStat = adTestStat/madTestStat;
+for i=1:length(typeIndex)
+    if radTestStat(i) > 4 && signTestStat(i)
+        outpks(typeIndex(i)).type = 1;
+    end
+end
+%create a peak map
+peakmap2 = zeros(length(sts),length(s));
+for i=1:Lp
+    j = outpks(i).scaleindex;
+    k = outpks(i).time;
+    peakmap2(j,k) = outpks(i).type;
+end
+figure
+imagesc(peakmap2)
 %plot peaks
 figure
 plot(s)
 hold on
 %Show signal peaks
+temp = [outpks(:).type];
+typeIndex = (1:Lp)';
+temp = temp == 2;
+typeIndex = typeIndex(temp)';
 temp1 = zeros(Ls,1);
 temp2 = zeros(Ls,1);
 for i=typeIndex
-        temp1(i) = outpks(i).time;
-        temp2(i) = outpks(i).value;
+    temp1(i) = outpks(i).time;
+    temp2(i) = outpks(i).value;
 end
 peak_index = temp1(temp1>0);
 peak_value = temp2(temp2>0);
