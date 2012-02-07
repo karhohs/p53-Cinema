@@ -109,7 +109,7 @@ penguinjet;
 %The peaks of every ridge represent a candidate peak from the original
 %waveform. The ridge peak contains both positional and scale information.
 %Selective criteria based upon the wavelet transform can be used to sift
-%through noise and determine the most prominent peaks. 
+%through noise and determine the most prominent peaks.
 pks = processPeaks(s,protopks,pkSclStats);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Everything above here is pretty solid
 vly = processPeaks(-s,protoval,valSclStats);
@@ -705,6 +705,7 @@ function [outpks] = processPeaks(s,inpks,sts)
 coiScaleFactor = 2; %adjusts the width of the cone of influence
 lfthresh = 1.25; %A scale factor to help label type 3 peaks. When two peaks occur close to each other, sometimes this can look like 1 larger peak. This puts emphasis on making these two peaks instead of one.
 madThresh = 4; %This is the cutoff for median absolute deviation outlier detection
+blkScaleFactor = 2;
 %-----
 Lp=length(inpks);
 Ls = length(s);
@@ -729,7 +730,6 @@ outpks(end).type = [];
 temp = zeros(1,Lp);
 temp = num2cell(temp);
 [outpks(:).type]=deal(temp{:});
-%<DEBUG>
 %create a peak map
 peakmap = zeros(length(sts),length(s));
 for i=1:Lp
@@ -737,9 +737,10 @@ for i=1:Lp
     k = outpks(i).time;
     peakmap(j,k) = i;
 end
-figure
-imagesc(peakmap)
-penguinjet;
+%<DEBUG>
+% figure
+% imagesc(peakmap)
+% penguinjet;
 %<\DEBUG>
 %initialize the matchup matrix that keeps track of the pair of peaks where
 %the current peak is less than the "greater" peak.
@@ -761,43 +762,36 @@ for i=1:Lp
             break;
         end
         temp = peakmap(j,coi(j,1):coi(j,2));
-        temp_cnt = sum(any(temp));
+        temp = temp(temp>0);
+        temp_cnt = length(temp);
         switch(temp_cnt)
             case 0
                 %do nothing
             case 1
-                for k=1:length(temp)
-                    if temp(k) ~= 0
-                        stat1 = outpks(temp(k)).ridgelength*outpks(temp(k)).waveletcfs;
-                        if stat0<stat1
-                            if outpks(i).type == 0
-                                outpks(i).type = 1;
-                            end
-                            matchup(i) = temp(k);
-                            flag1 = true;
-                        end
-                        break;
-                    end
-                end
-            otherwise
-                coiDist = -inf;
-                ind = 0;
-                for k=1:length(temp)
-                    if temp(k) ~= 0
-                        tempDist = abs(outpks(i).time - outpks(temp(k)).time);
-                        if tempDist > coiDist
-                            ind = k;
-                            coiDist = tempDist;
-                        end
-                    end
-                end
-                stat1 = outpks(temp(ind)).ridgelength*outpks(temp(ind)).waveletcfs;
+                stat1 = outpks(temp).ridgelength*outpks(temp).waveletcfs;
                 if stat0<stat1
                     if outpks(i).type == 0
                         outpks(i).type = 1;
                     end
-                    matchup(i) = temp(k);
+                    matchup(i) = temp;
                     flag1 = true;
+                end
+            otherwise
+                absTime = zeros(length(temp),2);
+                absTime(:,1) = abs([outpks(temp).time]-outpks(i).time)';
+                absTime(:,2) = temp';
+                absTime = sortrows(absTime,1);
+                temp = absTime(:,2);
+                for k=1:length(temp)
+                    stat1 = outpks(temp(k)).ridgelength*outpks(temp(k)).waveletcfs;
+                    if stat0<stat1
+                        if outpks(i).type == 0
+                            outpks(i).type = 1;
+                        end
+                        matchup(i) = temp(k);
+                        flag1 = true;
+                        break
+                    end
                 end
         end
     end
@@ -807,14 +801,14 @@ for i=1:Lp
 end
 %<DEBUG>
 %create a peak map
-peakmap2 = zeros(length(sts),length(s));
-for i=1:Lp
-    j = outpks(i).scaleindex;
-    k = outpks(i).time;
-    peakmap2(j,k) = outpks(i).type;
-end
-figure
-imagesc(peakmap2)
+% peakmap2 = zeros(length(sts),length(s));
+% for i=1:Lp
+%     j = outpks(i).scaleindex;
+%     k = outpks(i).time;
+%     peakmap2(j,k) = outpks(i).type;
+% end
+% figure
+% imagesc(peakmap2)
 %<\DEBUG>
 %Now scan all the type 2 peaks from the highest scale to the lowest. Look
 %at the peaks in the lower scale in a block the width of the scale of the
@@ -832,41 +826,49 @@ typeIndex = typeIndex(temp)';
 typeIndex = fliplr(typeIndex);
 for i = typeIndex
     blk = zeros(1,2); %The block of time to search for peaks in
-    stsScl = coiScaleFactor*outpks(i).scale; %The scale determines the size of the window of time
+    stsScl = blkScaleFactor*outpks(i).scale; %The scale determines the size of the window of time
     blk(1) = outpks(i).time - stsScl; %Left time point
     blk(2) = outpks(i).time + stsScl; %Right time point
     blk(blk<1) = 1;
     blk(blk>Ls) = Ls;
     stat0 = outpks(i).ridgelength*outpks(i).waveletcfs; %
     flag1 = false; %flag1 ensures that the peak comparison stops once a "greater" peak is found.
+    %new code below
+    blkmap = peakmap(1:outpks(i).scaleindex-1,blk(1):blk(2));
+    blkpks = blkmap(blkmap>0);
+    stat1 = [outpks(blkpks).waveletcfs].*[outpks(blkpks).ridgelength];
+    for j = ceil(outpks(i).scale/10):-1:1;
+        tempStat = stat0/(j+1);
+        temp = stat1>tempStat;
+        if sum(temp)>= j
+            outpks(i).type = 3;
+            flag1 = true;
+            break
+        end
+    end
+    %new code above
     for j=outpks(i).scaleindex-1:-1:1
         if flag1
             break;
         end
         temp = peakmap(j,blk(1):blk(2));
-        temp_cnt = sum(any(temp));
+        temp = temp(temp>0);
+        temp_cnt = length(temp);
         switch(temp_cnt)
             case 0
                 %do nothing
             case 1
-                for k=1:length(temp)
-                    if temp(k) ~= 0
-                        stat1 = lfthresh*outpks(temp(k)).ridgelength*outpks(temp(k)).waveletcfs;%
-                        if stat0<stat1
-                            outpks(i).type = 3;
-                            flag1 = true;
-                        end
-                        break;
-                    end
+                stat1 = lfthresh*outpks(temp).ridgelength*outpks(temp).waveletcfs;%
+                if stat0<stat1
+                    outpks(i).type = 3;
+                    flag1 = true;
                 end
             otherwise
                 for k=1:length(temp)
-                    if temp(k) ~= 0
-                        stat1 = lfthresh*outpks(temp(k)).ridgelength*outpks(temp(k)).waveletcfs;%
-                        if stat0<stat1
-                            outpks(i).type = 3;
-                            flag1 = true;
-                        end
+                    stat1 = lfthresh*outpks(temp(k)).ridgelength*outpks(temp(k)).waveletcfs;%
+                    if stat0<stat1
+                        outpks(i).type = 3;
+                        flag1 = true;
                         break;
                     end
                 end
@@ -875,14 +877,14 @@ for i = typeIndex
 end
 %<DEBUG>
 %create a peak map
-peakmap2 = zeros(length(sts),length(s));
-for i=1:Lp
-    j = outpks(i).scaleindex;
-    k = outpks(i).time;
-    peakmap2(j,k) = outpks(i).type;
-end
-figure
-imagesc(peakmap2)
+% peakmap2 = zeros(length(sts),length(s));
+% for i=1:Lp
+%     j = outpks(i).scaleindex;
+%     k = outpks(i).time;
+%     peakmap2(j,k) = outpks(i).type;
+% end
+% figure
+% imagesc(peakmap2)
 %<\DEBUG>
 %Now revisit all the type 1 peaks and scan for the peaks in their cone of
 %influence again. If the "greater" peak that made the current peak type 1
@@ -947,6 +949,7 @@ for i=1:length(typeIndex)
         outpks(typeIndex(i)).type = 1;
     end
 end
+%<DEBUG>
 %create a peak map
 peakmap2 = zeros(length(sts),length(s));
 for i=1:Lp
@@ -972,25 +975,26 @@ for i=typeIndex
     temp2(i) = outpks(i).value;
 end
 peak_index = temp1(temp1>0);
-peak_value = temp2(temp2>0);
+peak_value = temp2(temp2~=0);
 scatter(peak_index,peak_value,'filled','MarkerFaceColor','red');
+%<\DEBUG>
 end
 
 function [] = correctOvershoot()
 truePeakCutoffScale = 0.9; %When the signal rises with some overshoot this is caught as a peak. However, overshoot is sometimes not desired to be seen as a peak. This value places a minimum on the amount of overshoot.
 truePeakCutoff = truePeakCutoffScale*max_s;
 
-        indL = ind2-window;
-        if indL <= 0
-            indL = 1;
-        end
-        indR = ind2+window;
-        if indR > Ls
-            indR = Ls;
-        end
-        if (s(indR)>truePeakCutoff) || (s(indL)>truePeakCutoff) %Corrects for signal overshoot labeled as peaks
-            outpks(i).type = 1;
-        end
+indL = ind2-window;
+if indL <= 0
+    indL = 1;
+end
+indR = ind2+window;
+if indR > Ls
+    indR = Ls;
+end
+if (s(indR)>truePeakCutoff) || (s(indL)>truePeakCutoff) %Corrects for signal overshoot labeled as peaks
+    outpks(i).type = 1;
+end
 
 end
 
