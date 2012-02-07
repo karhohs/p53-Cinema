@@ -70,9 +70,7 @@ if isempty(ridgpks.scl)
     disp('There are no peaks in this waveform')
     return
 end
-%opportunity here to prune ridges by length
 [protopks,pkSclStats] = processRidgeMap(ridgpks,wavMexh.scl,wavMexh.phz,length(s));
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Everything above here is pretty solid
 %Repeat ridge mapping for valleys and switches
 temp = wavMexh;
 temp.cfs = -temp.cfs;
@@ -110,9 +108,10 @@ imagesc(newmap);
 penguinjet;
 %The peaks of every ridge represent a candidate peak from the original
 %waveform. The ridge peak contains both positional and scale information.
-%Selective criteria based upon the scale can be used to sift through noise
-%and get a sense for the breadth of each peak.
+%Selective criteria based upon the wavelet transform can be used to sift
+%through noise and determine the most prominent peaks. 
 pks = processPeaks(s,protopks,pkSclStats);
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Everything above here is pretty solid
 vly = processPeaks(-s,protoval,valSclStats);
 %<DEBUG>
 ptime = cell(1,length(protoval));
@@ -375,7 +374,6 @@ for i=length(peak_elected):-1:1
         peak_elected(i) = [];
     end
 end
-
 out = peak_elected;
 end
 
@@ -464,7 +462,6 @@ pow102 = ceil(log(hs/10)/log(2));
 if pow102<2
     pow102=2;
 end
-
 wavelet_scales = cell(1,pow102);
 for i=1:pow102
     wavelet_scales{i} = (1:10)*2^(i-1)+10*(2^(i-1)-1);
@@ -504,8 +501,6 @@ pow102 = ceil(log(hs/10)/log(2));
 if pow102<2
     pow102=2;
 end
-
-
 wavelet_scales = cell(1,pow102);
 for i=1:pow102
     wavelet_scales{i} = (1:10)*2^(i-1)+10*(2^(i-1)-1);
@@ -706,8 +701,11 @@ function [outpks] = processPeaks(s,inpks,sts)
 %type 1: high frequency noise
 %type 2: signal
 %type 3: low frequency noise
-disp('here I am')
-
+%----- parameters ----- tunable values that can alter the performance
+coiScaleFactor = 2; %adjusts the width of the cone of influence
+lfthresh = 1.25; %A scale factor to help label type 3 peaks. When two peaks occur close to each other, sometimes this can look like 1 larger peak. This puts emphasis on making these two peaks instead of one.
+madThresh = 4; %This is the cutoff for median absolute deviation outlier detection
+%-----
 Lp=length(inpks);
 Ls = length(s);
 temp = (1:Lp)'; %Represents the original indexing found in inpks
@@ -731,6 +729,7 @@ outpks(end).type = [];
 temp = zeros(1,Lp);
 temp = num2cell(temp);
 [outpks(:).type]=deal(temp{:});
+%<DEBUG>
 %create a peak map
 peakmap = zeros(length(sts),length(s));
 for i=1:Lp
@@ -741,13 +740,14 @@ end
 figure
 imagesc(peakmap)
 penguinjet;
+%<\DEBUG>
 %initialize the matchup matrix that keeps track of the pair of peaks where
 %the current peak is less than the "greater" peak.
 matchup = zeros(Lp,1);
 %starting with the lowest and earliest peak search for nearby peaks in the
 %area of a cone of influence
 Lsc = length(sts);
-stsScl = 2*[sts(:).scale]; %The scale determines the size of the window of time
+stsScl = coiScaleFactor*[sts(:).scale]; %The scale determines the size of the window of time
 for i=1:Lp
     coi = zeros(Lsc,2);
     coi(:,1) = outpks(i).time - stsScl; %Left time point
@@ -805,6 +805,7 @@ for i=1:Lp
         outpks(i).type = 2;
     end
 end
+%<DEBUG>
 %create a peak map
 peakmap2 = zeros(length(sts),length(s));
 for i=1:Lp
@@ -814,15 +815,15 @@ for i=1:Lp
 end
 figure
 imagesc(peakmap2)
+%<\DEBUG>
 %Now scan all the type 2 peaks from the highest scale to the lowest. Look
 %at the peaks in the lower scale in a block the width of the scale of the
 %current peak. If there are any peaks below the current peak that is
-%"greater" than the current peak becomes type 3.
+%"greater" than the current peak  the current peak becomes type 3.
 %
 %low frequency noise threshold: when two peaks occur very close together,
 %their troughs will overlap. Think of two PSFs close to each other. To
 %weight lower frequency peaks against this a threshold is used.
-lfthresh = 1.25;
 %isolate only type 2 peaks
 temp = [outpks(:).type];
 typeIndex = (1:Lp)';
@@ -831,12 +832,12 @@ typeIndex = typeIndex(temp)';
 typeIndex = fliplr(typeIndex);
 for i = typeIndex
     blk = zeros(1,2); %The block of time to search for peaks in
-    stsScl = outpks(i).scale; %The scale determines the size of the window of time
+    stsScl = coiScaleFactor*outpks(i).scale; %The scale determines the size of the window of time
     blk(1) = outpks(i).time - stsScl; %Left time point
     blk(2) = outpks(i).time + stsScl; %Right time point
     blk(blk<1) = 1;
     blk(blk>Ls) = Ls;
-    stat0 = outpks(i).ridgelength*outpks(i).waveletcfs;
+    stat0 = outpks(i).ridgelength*outpks(i).waveletcfs; %
     flag1 = false; %flag1 ensures that the peak comparison stops once a "greater" peak is found.
     for j=outpks(i).scaleindex-1:-1:1
         if flag1
@@ -850,7 +851,7 @@ for i = typeIndex
             case 1
                 for k=1:length(temp)
                     if temp(k) ~= 0
-                        stat1 = lfthresh*outpks(temp(k)).ridgelength*outpks(temp(k)).waveletcfs;
+                        stat1 = lfthresh*outpks(temp(k)).ridgelength*outpks(temp(k)).waveletcfs;%
                         if stat0<stat1
                             outpks(i).type = 3;
                             flag1 = true;
@@ -861,7 +862,7 @@ for i = typeIndex
             otherwise
                 for k=1:length(temp)
                     if temp(k) ~= 0
-                        stat1 = lfthresh*outpks(temp(k)).ridgelength*outpks(temp(k)).waveletcfs;
+                        stat1 = lfthresh*outpks(temp(k)).ridgelength*outpks(temp(k)).waveletcfs;%
                         if stat0<stat1
                             outpks(i).type = 3;
                             flag1 = true;
@@ -872,6 +873,7 @@ for i = typeIndex
         end
     end
 end
+%<DEBUG>
 %create a peak map
 peakmap2 = zeros(length(sts),length(s));
 for i=1:Lp
@@ -881,10 +883,10 @@ for i=1:Lp
 end
 figure
 imagesc(peakmap2)
+%<\DEBUG>
 %Now revisit all the type 1 peaks and scan for the peaks in their cone of
 %influence again. If the "greater" peak that made the current peak type 1
 %in the first round is type 3, then make the current peak type 2.
-
 %isolate only type 1 peaks
 temp = [outpks(:).type];
 typeIndex = (1:Lp)';
@@ -895,7 +897,6 @@ for i=typeIndex
         outpks(i).type = 2;
     end
 end
-
 %the signal peaks are adjusted to the highest nearby point on the signal.
 %isolate only type 2 peaks. If the type 2 peak is not a true peak. Convert
 %it to type 1.
@@ -916,15 +917,15 @@ for i = typeIndex
         indR = Ls;
     end
     [max_s,ind] = max(s(indL:indR));
-    if (ind == 1) || (ind == (indR-indL+1))
+    ind2 = ind + indL - 1;
+    if (ind == 1) || (ind == (indR-indL+1)) %If the max signal value is an endpoint then this is not a peak
         outpks(i).type = 1;
     else
-        ind = ind + indL - 1;
+        ind = ind2;
         outpks(i).time = ind;
         outpks(i).value = max_s;
     end
 end
-
 %Use median absolute deviation to identify outliers and relabel them as
 %type 1.
 temp = [outpks(:).type];
@@ -942,7 +943,7 @@ adTestStat = abs(adTestStat);
 madTestStat = median(adTestStat);
 radTestStat = adTestStat/madTestStat;
 for i=1:length(typeIndex)
-    if radTestStat(i) > 4 && signTestStat(i)
+    if radTestStat(i) > madThresh && signTestStat(i)
         outpks(typeIndex(i)).type = 1;
     end
 end
@@ -973,6 +974,24 @@ end
 peak_index = temp1(temp1>0);
 peak_value = temp2(temp2>0);
 scatter(peak_index,peak_value,'filled','MarkerFaceColor','red');
+end
+
+function [] = correctOvershoot()
+truePeakCutoffScale = 0.9; %When the signal rises with some overshoot this is caught as a peak. However, overshoot is sometimes not desired to be seen as a peak. This value places a minimum on the amount of overshoot.
+truePeakCutoff = truePeakCutoffScale*max_s;
+
+        indL = ind2-window;
+        if indL <= 0
+            indL = 1;
+        end
+        indR = ind2+window;
+        if indR > Ls
+            indR = Ls;
+        end
+        if (s(indR)>truePeakCutoff) || (s(indL)>truePeakCutoff) %Corrects for signal overshoot labeled as peaks
+            outpks(i).type = 1;
+        end
+
 end
 
 function [] = plotPeaksAndValleys(s,pks,vly)
