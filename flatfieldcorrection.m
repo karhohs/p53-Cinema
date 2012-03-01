@@ -36,6 +36,38 @@ end
 Temp(i:end)=[];
 channels_stacks = unique(Temp); %The different channels are saved
 
+%import directory of flatfield images
+disp(['working in ', ffpath]); %Sanity Check
+dirCon_ff = dir(ffpath);
+%only the channels with flat field images can be corrected. identify those
+%channels
+expr='.+(?=_)';
+Temp=cell([1,length(dirCon_ff)]); %Initialize cell array
+i=1;
+for j=1:length(dirCon_ff)
+    Temp2=regexp(dirCon_ff(j).name,expr,'match','once','ignorecase');
+    if Temp2
+        Temp{i}=Temp2;
+        i=i+1;
+    end
+end
+Temp(i:end)=[];
+channels_ff = unique(Temp); %The different channels are saved
+for i=length(channels_stacks):-1:1
+    flag = true;
+    for j=length(channels_ff):-1:1
+        if strcmp(channels_stacks{i},channels_ff{j})
+            flag = false;
+            break
+        end
+    end
+    if flag
+        channels_stacks(i) = [];
+    end
+end
+if isempty(channels_stacks)
+    error('fltfldcrct:noFF','There are no mathcing flatfield images.')
+end
 %----- Create a new folder to hold corrected images -----
 tempfoldername=regexp(stackpath,'(?<=\\)[\w ]*','match'); %Prepare to create a new folder to place background subtracted stacks
 tempfoldername=[tempfoldername{end},'_ff'];
@@ -50,9 +82,6 @@ ffstackpath=pwd;
 %gain column, 1 if gain image exists 0 otherwise.
 channelTruthTable = zeros(length(channels_stacks),2);
 %---- check for existence of correction images ----
-%import directory of flatfield images
-disp(['working in ', ffpath]); %Sanity Check
-dirCon_ff = dir(ffpath);
 %first, identify offset  and gain images and their channel
 expr='.+(?=_offset.tif)';
 for j=1:length(dirCon_ff)
