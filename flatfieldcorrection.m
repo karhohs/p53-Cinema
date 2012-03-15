@@ -282,10 +282,12 @@ end
 % ----- Remove empty cells -----
 Temp(i:end)=[];
 %identify the length of exposure for each image
+expr=[chan '_(\d+)'];
 exposure = zeros(size(Temp));
 flatfieldIM = cell(size(Temp));
 for i=1:length(Temp)
-    exposure(i) = str2double(regexp(Temp{i},'\d+','match','once'));
+    [~, temp_num] = regexp(Temp{i},expr,'match','once','tokens');
+    exposure(i) = str2double(temp_num);
     if exposure == 0
         ind = i;
     end
