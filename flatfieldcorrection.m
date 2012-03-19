@@ -22,12 +22,22 @@ end
 disp(['working in ', stackpath]); %Sanity Check
 dirCon_stack = dir(stackpath);
 stacknames=importStackNames(dirCon_stack);
+stacknames2=stacknames;
+%This is part of a bug. This file expects the input filename to be of a
+%certain format. The following for-loop partially ensures the file names
+%are in that format. 
+for i=1:length(stacknames)
+Name_temp = regexprep(stacknames(i),'\s',''); %Remove all not(alphabetic, numeric, or underscore) characters
+Name_temp = regexprep(Name_temp,'tocamera','','ignorecase'); %remove 'tocamera' if present b/c it is not informative
+Name_temp = regexprep(Name_temp,'camera','','ignorecase'); %remove 'camera' if present b/c it is not informative
+stacknames2(i) = Name_temp;
+end
 %identify the channels
 expr='(?<=_w\d+).*(?=_s\d+)';
 Temp=cell([1,length(stacknames)]); %Initialize cell array
 i=1;
-for j=1:length(dirCon_stack)
-    Temp2=regexp(dirCon_stack(j).name,expr,'match','once','ignorecase');
+for j=1:length(stacknames2)
+    Temp2=regexp(stacknames2{j},expr,'match','once','ignorecase');
     if Temp2
         Temp{i}=Temp2;
         i=i+1;
@@ -66,7 +76,7 @@ for i=length(channels_stacks):-1:1
     end
 end
 if isempty(channels_stacks)
-    error('fltfldcrct:noFF','There are no mathcing flatfield images.')
+    error('fltfldcrct:noFF','There are no matching flatfield images.')
 end
 %----- Create a new folder to hold corrected images -----
 tempfoldername=regexp(stackpath,'(?<=\\)[\w ]*','match'); %Prepare to create a new folder to place background subtracted stacks
@@ -139,12 +149,12 @@ for j=1:length(channels_stacks)
     max_temp=str2double(max_temp)/1000;
     gain=gain*max_temp/65536;
     for i=1:length(stacknames)
-        temp = regexp(stacknames{i},channels_stacks{j},'match','once');
+        temp = regexp(stacknames2{i},channels_stacks{j},'match','once');
         if ~isempty(temp)
             disp(['Flatfield correcting ',stacknames{i}])
             info = imfinfo([stackpath,'\',stacknames{i}],'tif');
             t = Tiff([stackpath,'\',stacknames{i}],'r');
-            Name = regexprep(stacknames{i},'(?<=_t)(\w*)(?=\.)','$1_ff');
+            Name = regexprep(stacknames2{i},'(?<=_t)(\w*)(?=\.)','$1_ff');
             if length(info) > 1
                 for k=1:length(info)-1
                     IM = double(t.read);
