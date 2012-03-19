@@ -113,7 +113,7 @@ for i=1:Wmax
                 %Due to the quirks introduced in the evolution of software through ad hoc
                 %programming it is some times necessary to change the format of the .tif
                 %image filenames created by metamorph.
-                Name_temp = regexprep(FileNames{k,j,i},'\W*',''); %Remove all not(alphabetic, numeric, or underscore) characters
+                Name_temp = regexprep(FileNames{k,j,i},'\s',''); %Remove all not(alphabetic, numeric, or underscore) characters
                 Name_temp = regexprep(Name_temp,'tocamera','','ignorecase'); %remove 'tocamera' if present b/c it is not informative
                 Name_temp = regexprep(Name_temp,'camera','','ignorecase'); %remove 'camera' if present b/c it is not informative
                 Name_temp = regexprep(Name_temp,'(?<=_t).*','STACK'); %'_t' is always at the end of the filename
