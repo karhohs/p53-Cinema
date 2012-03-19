@@ -67,12 +67,12 @@ temp2 = temp1.*h;
 h=h/temp2;
 clear temp1;
 clear temp2;
-IM2 = imfilter(IM,h,'symmetric'); %Totally works. sweet!
+IM = imfilter(IM,h,'symmetric'); %Totally works. sweet!
 %----- calculate the test statistics that will identify legit spots -----
 %%%Test Statistic 1: The 3D curvature. Gives a sense about how much a spot
 %resembles a point source of light. It gives a sense of the spots geometry
 %as opposed to the brightness of the spot.
-curvature = mySobelHessianCurvature(IM2);
+curvature = mySobelHessianCurvature(IM);
 %A really large negative value indicates geometry like a point source. The
 %numbers produced are often extremely large and it may be a good idea to
 %normalize.
@@ -83,33 +83,88 @@ curvature = abs(curvature);
 %reduces the weight of random peaks due to noise, since noise in these
 %images is of the zero-mean type.
 %find local maxima
-fociCandidates = imregionalmax(IM2,26);
+fociCandidates = imregionalmax(IM,26);
 %Find the mean of a local volume that will capture an entire point source.
 xy = round(4*sigmaXY);
 z = round(4*sigmaZ);
-IM2Pad = padarray(IM2,[xy xy z],'symmetric');
+IMPad = padarray(IM,[xy xy z],'symmetric');
 fociCandidatesPad = padarray(fociCandidates,[xy xy z]);
 index = find(fociCandidatesPad);
 clear fociCandidatesPad;
-IM2MeanIntensity = zeros(size(IM2Pad));
-s=size(IM2Pad);
+s=size(IMPad);
+IMMeanIntensity = zeros(s);
 if iscolumn(index)
     index = index';
 end
 for i = index
     [i2,j2,k2] = ind2sub(s,i);
-    localIntensityVolume=IM2Pad(i2-xy:i2+xy,j2-xy:j2+xy,k2-z:k2+z);
-    IM2MeanIntensity(i) = mean(mean(mean(localIntensityVolume)));
+    localIntensityVolume=IMPad(i2-xy:i2+xy,j2-xy:j2+xy,k2-z:k2+z);
+    IMMeanIntensity(i) = mean(mean(mean(localIntensityVolume)));
 end
-clear IM2Pad; %clear up some memory
-IM2MeanIntensity = IM2MeanIntensity(xy+1:end-xy,xy+1:end-xy,z+1:end-z);
+clear IMPad; %clear up some memory
+IMMeanIntensity = IMMeanIntensity(xy+1:end-xy,xy+1:end-xy,z+1:end-z);
 %The final test statistic is the product of test statistic 1 and 2
-spotStat = IM2MeanIntensity(i).*curvature;
-
+spotStat = IMMeanIntensity(i).*curvature;
+%----- Find a threshold that separates signal from noise -----
 index = find(fociCandidates);
+clear fociCandidates
 if iscolumn(index)
     index = index';
 end
+spotStat = spotStat(index);
+%find a good guess for the threshold using the triangle threshold
+threshold = trithresh(spotStat);
+
+if isrow(spotStat)
+    spotStat = spotStat';
+end
+spotStat = [spotStat,index];
+spotStat = sortRows(spotStat,1);
+spotNum = size(spotStat,1);
+for i = 1:spotNum
+    if spotStat(i,1) > threshold
+        ind = i;
+        break;
+    end
+end
+
+%search around the threshold space centered at the intial guess and find
+%the threshold that minimizes the rate of change of foci count
+
+s = size(IM);
+foci = zeros(s);
+for i = ind:spotNum
+    foci(spotStat(i,2)) = 1;
+end
+%----- Create the final image with bonafide spots and other aesthetic images -----
+
+%sum projection of foci
+sumProj = sum(foci,3);
+
+%max project the stamp
+stampProj = zeros(size(sumProj));
+%gaussian stamp (approx. the PSF) on the sum projection of foci
+%3D Gaussian Filter\Stamp\PSF approximation
+mu = [0,0,0]; %zero mean gaussian
+SIGMA = [sigmaXY,0,0;0,sigmaXY,0;0,0,sigmaZ];
+h = zeros(2*xy+1,2*xy+1,2*z+1);
+for i=1:2*xy+1
+    for j=1:2*xy+1
+        for k=1:2*z+1
+            h(i,j,k) = mvnpdf([i-1-xy,j-1-xy,k-1-z],mu,SIGMA); %the 3D filter
+        end
+    end
+end
+index = find(sumProj);
+if iscolumn(index)
+    index = index';
+end
+s = size(sumProj);
+for i=index
+    [i2,j2] = ind2sub(s,i);
+ stampProj(i2-xy:i2+xy,j2-xy:j2+xy,k2-z:k2+z) = sumProj(i)*h;
+end
+
 for i = 1:lenz
     imwrite(uint16(IM3(:,:,i)),'fishtest6.tif','tif','WriteMode','append','Compression','none');
 end
@@ -244,17 +299,37 @@ for i = 1:numel(I)
 end
 end
 
-%%%%%
-%3D Gaussian Filter
-% mu = [0,0,0]; %zero mean gaussian
-% SIGMA = [sigmaXY,0,0;0,sigmaXY,0;0,0,sigmaZ];
-% h = zeros(2*xy+1,2*xy+1,2*z+1);
-% for i=1:2*xy+1
-%     for j=1:2*xy+1
-%         for k=1:2*z+1
-%             h(i,j,k) = mvnpdf([i-1-xy,j-1-xy,k-1-z],mu,SIGMA); %the 3D filter
-%         end
-%     end
-% end
-%IM2 = imfilter(IM,h,'symmetric'); %Totally works. sweet!
-%%%%%
+function [trithresh]=trithresh(A)
+%----- Approximate histogram as triangle -----
+%Create the histogram
+[n,xout]=hist(A,100);
+%Find the highest peak the histogram
+[c,ind]=max(n);
+%Assume the long tail is to the right of the peak and envision a line from
+%the top of this peak to the end of the histogram.
+%The slope of this line, the hypotenuse, is calculated.
+x1=0;
+y1=c;
+x2=length(n)-ind;
+y2=n(end);
+m=(y2-y1)/(x2-x1); %The slope of the line
+
+%----- Find the greatest distance -----
+%We are looking for the greatest distance betweent the histrogram and line
+%of the triangle via perpendicular lines
+%The slope of all lines perpendicular to the histogram hypotenuse is the
+%negative reciprocal
+p=-1/m; %The slope is now the negative reciprocal
+%We now have two slopes and two points for two lines. We now need to solve
+%this two-equation system to find their intersection, which can then be
+%used to calculate the distances
+iarray=(0:(length(n)-ind));
+L=zeros(size(n));
+for i=iarray
+intersect=(1/(m-p))*[-p,m;-1,1]*[c;n(i+ind)-p*i];
+%intersect(1)= y coordinate, intersect(2)= x coordinate
+L(i+ind)=sqrt((intersect(2)-i)^2+(intersect(1)-n(i+ind))^2);
+end
+[~,ind2]=max(L);
+trithresh=xout(ind2);
+end
