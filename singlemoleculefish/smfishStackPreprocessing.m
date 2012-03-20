@@ -130,7 +130,7 @@ for bigInd = 1:length(stacknames)
     clear IMPad; %clear up some memory
     IMMeanIntensity = IMMeanIntensity(xy+1:end-xy,xy+1:end-xy,z+1:end-z);
     %The final test statistic is the product of test statistic 1 and 2
-    spotStat = IMMeanIntensity(i).*curvature;
+    spotStat = IMMeanIntensity.*curvature;
     %----- Find a threshold that separates signal from noise -----
     index = find(fociCandidates);
     clear fociCandidates
@@ -139,13 +139,16 @@ for bigInd = 1:length(stacknames)
     end
     spotStat = spotStat(index);
     %find a good guess for the threshold using the triangle threshold
-    threshold = trithresh(spotStat);
+    threshold = exp(trithresh(log(spotStat)));
     
     if isrow(spotStat)
         spotStat = spotStat';
     end
+    if isrow(index)
+        index = index';
+    end
     spotStat = [spotStat,index]; %#ok<AGROW>
-    spotStat = sortRows(spotStat,1);
+    spotStat = sortrows(spotStat,1);
     spotNum = size(spotStat,1);
     for i = 1:spotNum
         if spotStat(i,1) > threshold
@@ -160,7 +163,7 @@ for bigInd = 1:length(stacknames)
     spotNumArray = zeros(size(threshSearch));
     for j = 1:length(threshSearch)
         for i = 1:spotNum
-            if spotStat(i,1) > threshold
+            if spotStat(i,1) > threshSearch(j)
                 spotNumArray(j) = spotNum - i;
                 break;
             end
@@ -204,13 +207,13 @@ for bigInd = 1:length(stacknames)
         [i2,j2,k2] = ind2sub(s,i);
         stampProj(i2-xy:i2+xy,j2-xy:j2+xy,k2-z:k2+z) = stampProj(i2-xy:i2+xy,j2-xy:j2+xy,k2-z:k2+z) + h;
     end
+    Name = regexprep(stacknames2{bigInd},'(?<=_t)(\w*)(?=\.)','$1_stampProj3D');
+    for i = 1:s(3)
+        imwrite(uint16(stampProj(:,:,i)),[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
+    end
     stampProj = sum(stampProj,3);
     Name = regexprep(stacknames2{bigInd},'(?<=_t)(\w*)(?=\.)','$1_stampProj');
     imwrite(stampProj,[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
-%     for i = 1:lenz
-%         imwrite(IM,[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
-%         imwrite(uint16(IM3(:,:,i)),'fishtest6.tif','tif','WriteMode','append','Compression','none');
-%     end
 end
 end
 
@@ -229,100 +232,127 @@ Fx = zeros(size(I));
 for i=1:sx
     tempI1(:,i,:) = imfilter(I(:,i,:),h1,'symmetric'); %z
 end
+disp('1/27')
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h1,'symmetric'); %y
 end
+disp('2/27')
 for i=1:sz
     Fx(:,:,i) = imfilter(tempI2(:,:,i),h2','symmetric'); %x
 end
+disp('3/27')
 %The Sobel separted filters to find the Fy
 Fy = zeros(size(I));
 for i=1:sx
     tempI1(:,i,:) = imfilter(I(:,i,:),h1,'symmetric'); %z
 end
+disp('4/27')
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h2,'symmetric'); %y
 end
+disp('5/27')
 for i=1:sz
     Fy(:,:,i) = imfilter(tempI2(:,:,i),h1','symmetric'); %x
 end
+disp('6/27')
 %The Sobel separted filters to find the Fz
 Fz = zeros(size(I));
 for i=1:sx
     tempI1(:,i,:) = imfilter(I(:,i,:),h2,'symmetric'); %z
 end
+disp('7/27')
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h1,'symmetric'); %y
 end
+disp('8/27')
 for i=1:sz
     Fz(:,:,i) = imfilter(tempI2(:,:,i),h1','symmetric'); %x
 end
+disp('9/27')
 %The Sobel separted filters to find the Fxx
 Fxx = zeros(size(I));
 for i=1:sx
     tempI1(:,i,:) = imfilter(Fx(:,i,:),h1,'symmetric'); %z
 end
+disp('10/27')
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h1,'symmetric'); %y
 end
+disp('11/27')
 for i=1:sz
     Fxx(:,:,i) = imfilter(tempI2(:,:,i),h2','symmetric'); %x
 end
+disp('12/27')
 %The Sobel separted filters to find the Fxy
 Fxy = zeros(size(I));
 for i=1:sx
     tempI1(:,i,:) = imfilter(Fx(:,i,:),h1,'symmetric'); %z
 end
+disp('13/27')
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h1,'symmetric'); %y
 end
+disp('14/27')
 for i=1:sz
     Fxy(:,:,i) = imfilter(tempI2(:,:,i),h2','symmetric'); %x
 end
+disp('15/27')
 %The Sobel separted filters to find the Fxz
 Fxz = zeros(size(I));
 for i=1:sx
     tempI1(:,i,:) = imfilter(Fx(:,i,:),h1,'symmetric'); %z
 end
+disp('16/27')
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h1,'symmetric'); %y
 end
+disp('17/27')
 for i=1:sz
     Fxz(:,:,i) = imfilter(tempI2(:,:,i),h2','symmetric'); %x
 end
+disp('18/27')
 %The Sobel separted filters to find the Fyy
 Fyy = zeros(size(I));
 for i=1:sx
     tempI1(:,i,:) = imfilter(Fy(:,i,:),h1,'symmetric'); %z
 end
+disp('19/27')
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h2,'symmetric'); %y
 end
+disp('20/27')
 for i=1:sz
     Fyy(:,:,i) = imfilter(tempI2(:,:,i),h1','symmetric'); %x
 end
+disp('21/27')
 %The Sobel separted filters to find the Fyz
 Fyz = zeros(size(I));
 for i=1:sx
     tempI1(:,i,:) = imfilter(Fy(:,i,:),h1,'symmetric'); %z
 end
+disp('22/27')
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h2,'symmetric'); %y
 end
+disp('23/27')
 for i=1:sz
     Fyz(:,:,i) = imfilter(tempI2(:,:,i),h1','symmetric'); %x
 end
+disp('24/27')
 %The Sobel separted filters to find the Fzz
 Fzz = zeros(size(I));
 for i=1:sx
     tempI1(:,i,:) = imfilter(Fz(:,i,:),h2,'symmetric'); %z
 end
+disp('25/27')
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h1,'symmetric'); %y
 end
+disp('26/27')
 for i=1:sz
     Fzz(:,:,i) = imfilter(tempI2(:,:,i),h1','symmetric'); %x
 end
+disp('27/27')
 %Find the curvature matrix
 clear tempI1;
 clear tempI2;
