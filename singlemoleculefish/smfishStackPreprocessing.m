@@ -47,7 +47,6 @@ for i=1:length(stacknames)
     Name_temp = regexprep(Name_temp,'camera','','ignorecase'); %remove 'camera' if present b/c it is not informative
     stacknames2(i) = Name_temp;
 end
-
 for bigInd = 1:length(stacknames)
     %----- Load the image file -----
     IM = loadZstack([stackpath '\' stacknames{bigInd}]);
@@ -186,7 +185,10 @@ for bigInd = 1:length(stacknames)
     Name = regexprep(stacknames2{bigInd},'(?<=_t)(\w*)(?=\.)','$1_sumProj');
     imwrite(sumProj,[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
     %max project the stamp
+    xy = round(3*sigmaXY);
+    z = round(3*sigmaZ);
     stampProj = zeros(size(foci));
+    stampProj = padarray(stampProj,[xy xy z],'symmetric');
     %gaussian stamp (approx. the PSF) on the sum projection of foci
     %3D Gaussian Filter\Stamp\PSF approximation
     mu = [0,0,0]; %zero mean gaussian
@@ -199,7 +201,7 @@ for bigInd = 1:length(stacknames)
             end
         end
     end
-    h=h*(2^14)/(max(max(max(h))));
+    h=h*(2^13)/(max(max(max(h))));
     index = find(foci);
     if iscolumn(index)
         index = index';
@@ -209,6 +211,7 @@ for bigInd = 1:length(stacknames)
         [i2,j2,k2] = ind2sub(s,i);
         stampProj(i2-xy:i2+xy,j2-xy:j2+xy,k2-z:k2+z) = stampProj(i2-xy:i2+xy,j2-xy:j2+xy,k2-z:k2+z) + h;
     end
+    stampProj = stampProj(xy+1:end-xy,xy+1:end-xy,z+1:end-z);
     Name = regexprep(stacknames2{bigInd},'(?<=_t)(\w*)(?=\.)','$1_stampProj3D');
     for i = 1:s(3)
         imwrite(uint16(stampProj(:,:,i)),[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
@@ -234,127 +237,100 @@ Fx = zeros(size(I));
 for i=1:sx
     tempI1(:,i,:) = imfilter(I(:,i,:),h1,'symmetric'); %z
 end
-disp('1/27')
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h1,'symmetric'); %y
 end
-disp('2/27')
 for i=1:sz
     Fx(:,:,i) = imfilter(tempI2(:,:,i),h2','symmetric'); %x
 end
-disp('3/27')
 %The Sobel separted filters to find the Fy
 Fy = zeros(size(I));
 for i=1:sx
     tempI1(:,i,:) = imfilter(I(:,i,:),h1,'symmetric'); %z
 end
-disp('4/27')
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h2,'symmetric'); %y
 end
-disp('5/27')
 for i=1:sz
     Fy(:,:,i) = imfilter(tempI2(:,:,i),h1','symmetric'); %x
 end
-disp('6/27')
 %The Sobel separted filters to find the Fz
 Fz = zeros(size(I));
 for i=1:sx
     tempI1(:,i,:) = imfilter(I(:,i,:),h2,'symmetric'); %z
 end
-disp('7/27')
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h1,'symmetric'); %y
 end
-disp('8/27')
 for i=1:sz
     Fz(:,:,i) = imfilter(tempI2(:,:,i),h1','symmetric'); %x
 end
-disp('9/27')
 %The Sobel separted filters to find the Fxx
 Fxx = zeros(size(I));
 for i=1:sx
     tempI1(:,i,:) = imfilter(Fx(:,i,:),h1,'symmetric'); %z
 end
-disp('10/27')
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h1,'symmetric'); %y
 end
-disp('11/27')
 for i=1:sz
     Fxx(:,:,i) = imfilter(tempI2(:,:,i),h2','symmetric'); %x
 end
-disp('12/27')
 %The Sobel separted filters to find the Fxy
 Fxy = zeros(size(I));
 for i=1:sx
     tempI1(:,i,:) = imfilter(Fx(:,i,:),h1,'symmetric'); %z
 end
-disp('13/27')
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h1,'symmetric'); %y
 end
-disp('14/27')
 for i=1:sz
     Fxy(:,:,i) = imfilter(tempI2(:,:,i),h2','symmetric'); %x
 end
-disp('15/27')
 %The Sobel separted filters to find the Fxz
 Fxz = zeros(size(I));
 for i=1:sx
     tempI1(:,i,:) = imfilter(Fx(:,i,:),h1,'symmetric'); %z
 end
-disp('16/27')
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h1,'symmetric'); %y
 end
-disp('17/27')
 for i=1:sz
     Fxz(:,:,i) = imfilter(tempI2(:,:,i),h2','symmetric'); %x
 end
-disp('18/27')
 %The Sobel separted filters to find the Fyy
 Fyy = zeros(size(I));
 for i=1:sx
     tempI1(:,i,:) = imfilter(Fy(:,i,:),h1,'symmetric'); %z
 end
-disp('19/27')
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h2,'symmetric'); %y
 end
-disp('20/27')
 for i=1:sz
     Fyy(:,:,i) = imfilter(tempI2(:,:,i),h1','symmetric'); %x
 end
-disp('21/27')
 %The Sobel separted filters to find the Fyz
 Fyz = zeros(size(I));
 for i=1:sx
     tempI1(:,i,:) = imfilter(Fy(:,i,:),h1,'symmetric'); %z
 end
-disp('22/27')
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h2,'symmetric'); %y
 end
-disp('23/27')
 for i=1:sz
     Fyz(:,:,i) = imfilter(tempI2(:,:,i),h1','symmetric'); %x
 end
-disp('24/27')
 %The Sobel separted filters to find the Fzz
 Fzz = zeros(size(I));
 for i=1:sx
     tempI1(:,i,:) = imfilter(Fz(:,i,:),h2,'symmetric'); %z
 end
-disp('25/27')
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h1,'symmetric'); %y
 end
-disp('26/27')
 for i=1:sz
     Fzz(:,:,i) = imfilter(tempI2(:,:,i),h1','symmetric'); %x
 end
-disp('27/27')
 %Find the curvature matrix
 clear tempI1;
 clear tempI2;
@@ -411,7 +387,7 @@ end
 
 function [S] = JaredsBackground(S)
 resizeMultiplier = 1/2; % Downsampling scale factor makes image processing go faster and smooths image
-seSize = 10; % I find the value of 10 works well with 60x, binning 1, mRNA FISH images
+seSize = 30; % I find the value of 30 works well with 60x, binning 1, mRNA FISH images
 se = strel('disk', seSize*resizeMultiplier);  %Structing elements are necessary for using MATLABS image processing functions
 origSize  = size(S);
 for k=1:origSize(3)
