@@ -103,7 +103,8 @@ for bigInd = 1:length(stacknames)
     %numbers produced are often extremely large and it may be a good idea to
     %normalize.
     %I turned a negative into a positive; I want you all to know that.
-    curvature = abs(curvature);
+    curvature = -curvature;
+    curvature(curvature<0) = 0;
     %%%Test Statistic 2: The mean brightness of the area. Indeed, we expect the
     %mRNA FISH signal to be brighter than the background. Taking the mean
     %reduces the weight of random peaks due to noise, since noise in these
@@ -132,8 +133,9 @@ for bigInd = 1:length(stacknames)
     %The final test statistic is the product of test statistic 1 and 2
     spotStat = IMMeanIntensity.*curvature;
     %----- Find a threshold that separates signal from noise -----
-    index = find(fociCandidates);
-    clear fociCandidates
+    spotStat = spotStat.*fociCandidates;
+    index = find(spotStat);
+    %clear fociCandidates
     if iscolumn(index)
         index = index';
     end
