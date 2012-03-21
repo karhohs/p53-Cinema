@@ -154,40 +154,19 @@ for bigInd = 1:length(stacknames)
     %the lower half.
     spotStat = spotStat(round(end/2):end,:);
     %find a good guess for the threshold using the triangle threshold
-    threshold = exp(trithresh(log(spotStat)));
-    %search around the threshold space centered at the intial guess and find
-    %the threshold that minimizes the rate of change of foci count
-    spotNum = size(spotStat,1);
-    for i = 1:spotNum
-        if spotStat(i,1) > threshold
-            ind = i;
-            break;
-        end
-    end
-    threshSearch = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-    threshSearch = threshSearch*threshold;
-    spotNumArray = zeros(size(threshSearch));
-    for j = 1:length(threshSearch)
-        for i = 1:spotNum
-            if spotStat(i,1) > threshSearch(j)
-                spotNumArray(j) = spotNum - i;
-                break;
-            end
-        end
-    end
-    spotNumArrayDiff = diff(spotNumArray);
-    [~,temp] = min(spotNumArrayDiff);
-    ind = spotNum - spotNumArray(temp);
+    threshold = triminthresh(spotStat(:,1));
+    temp = spotStat(:,1)>threshold;
+    ind = find(temp,1,'first');
+    clear temp;
     s = size(IM);
     foci = zeros(s);
-    for i = ind:spotNum
-        foci(spotStat(i,2)) = 1;
-    end
+    foci(spotStat(ind:end,2)) = 1;
+    fociarray = spotStat(ind:end,2);
     %----- Create the final image with bonafide spots and other aesthetic images -----
     %sum projection of foci
     sumProj = sum(foci,3);
     Name = regexprep(stacknames2{bigInd},'(?<=_t)(\w*)(?=\.)','$1_sumProj');
-    imwrite(sumProj,[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
+    imwrite(uint8(sumProj),[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
     %max project the stamp
     xy = round(3*sigmaXY);
     z = round(3*sigmaZ);
@@ -219,12 +198,13 @@ for bigInd = 1:length(stacknames)
     end
     stampProj = stampProj(xy+1:end-xy,xy+1:end-xy,z+1:end-z);
     Name = regexprep(stacknames2{bigInd},'(?<=_t)(\w*)(?=\.)','$1_stampProj3D');
+    s=size(stampProj);
     for i = 1:s(3)
         imwrite(uint16(stampProj(:,:,i)),[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
     end
     stampProj = sum(stampProj,3);
     Name = regexprep(stacknames2{bigInd},'(?<=_t)(\w*)(?=\.)','$1_stampProj');
-    imwrite(stampProj,[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
+    imwrite(uint16(stampProj),[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
 end
 end
 
@@ -356,10 +336,47 @@ for i = 1:numel(I)
 end
 end
 
-function [trithresh]=trithresh(A)
+function [threshold] = doubletrithresh(A)
 %----- Approximate histogram as triangle -----
 %Create the histogram
 [n,xout]=hist(A,100);
+figure
+plot(xout,n)
+ind = triangleThreshCore(n);
+xout2 = xout(ind:end);
+n2 = n(ind:end);
+n2 = smooth(n2);
+ind = triangleThreshCore(n2);
+figure
+plot(xout2,n2)
+threshold = xout2(ind);
+end
+
+function [threshold] = triminthresh(A)
+%----- Approximate histogram as triangle -----
+%Create the histogram
+[n,xout]=hist(A,100);
+figure
+plot(xout,n)
+ind = triangleThreshCore(n);
+xout2 = xout(ind:end);
+n2 = n(ind:end);
+n2 = smooth(n2);
+figure
+plot(xout2,n2)
+n2 = conv(n2,[0.5 0 -0.5],'same'); %the central difference derivative
+figure
+plot(xout2,n2)
+for i = 2:length(n2);
+    if (n2(i-1)<0 && n2(i)>=0)
+        ind = i-1;
+        break
+    end
+end
+threshold = xout2(ind);
+end
+
+function [ind2] = triangleThreshCore(n)
 %Find the highest peak the histogram
 [c,ind]=max(n);
 %Assume the long tail is to the right of the peak and envision a line from
@@ -388,7 +405,6 @@ for i=iarray
     L(i+ind)=sqrt((intersect(2)-i)^2+(intersect(1)-n(i+ind))^2);
 end
 [~,ind2]=max(L);
-trithresh=xout(ind2);
 end
 
 function [S] = JaredsBackground(S)
