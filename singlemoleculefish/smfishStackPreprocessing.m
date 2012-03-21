@@ -139,9 +139,9 @@ for bigInd = 1:length(stacknames)
         index = index';
     end
     spotStat = spotStat(index);
-    %find a good guess for the threshold using the triangle threshold
-    threshold = exp(trithresh(log(spotStat)));
-    
+    %The test statistic tends to vary over several orders of magnitude
+    %therefore it is easier to compare these values in a log scale.
+    spotStat = log(spotStat);
     if isrow(spotStat)
         spotStat = spotStat';
     end
@@ -150,6 +150,13 @@ for bigInd = 1:length(stacknames)
     end
     spotStat = [spotStat,index]; %#ok<AGROW>
     spotStat = sortrows(spotStat,1);
+    %assume >50% of the potential foci are actually noise, so dispose of
+    %the lower half.
+    spotStat = spotStat(round(end/2):end,:);
+    %find a good guess for the threshold using the triangle threshold
+    threshold = exp(trithresh(log(spotStat)));
+    %search around the threshold space centered at the intial guess and find
+    %the threshold that minimizes the rate of change of foci count
     spotNum = size(spotStat,1);
     for i = 1:spotNum
         if spotStat(i,1) > threshold
@@ -157,8 +164,6 @@ for bigInd = 1:length(stacknames)
             break;
         end
     end
-    %search around the threshold space centered at the intial guess and find
-    %the threshold that minimizes the rate of change of foci count
     threshSearch = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
     threshSearch = threshSearch*threshold;
     spotNumArray = zeros(size(threshSearch));
@@ -179,7 +184,6 @@ for bigInd = 1:length(stacknames)
         foci(spotStat(i,2)) = 1;
     end
     %----- Create the final image with bonafide spots and other aesthetic images -----
-    
     %sum projection of foci
     sumProj = sum(foci,3);
     Name = regexprep(stacknames2{bigInd},'(?<=_t)(\w*)(?=\.)','$1_sumProj');
@@ -202,11 +206,13 @@ for bigInd = 1:length(stacknames)
         end
     end
     h=h*(2^13)/(max(max(max(h))));
-    index = find(foci);
+    foci2 = padarray(foci,[xy xy z]);
+    index = find(foci2);
     if iscolumn(index)
         index = index';
     end
-    s = size(foci);
+    s = size(foci2);
+    clear foci2;
     for i=index
         [i2,j2,k2] = ind2sub(s,i);
         stampProj(i2-xy:i2+xy,j2-xy:j2+xy,k2-z:k2+z) = stampProj(i2-xy:i2+xy,j2-xy:j2+xy,k2-z:k2+z) + h;
