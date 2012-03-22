@@ -3,12 +3,12 @@ function [] = smfishStackPreprocessing(stackpath,varargin)
 %create gaussian filter that approximates 3D PSF of the microscope.
 %Distance units are in micrometers.
 %----- Set Parameters -----
-objective = 60; %as in 60x
-NA = 1.4; %typical of 60x oil immersion objections
-rindex = 1.51; %typical refractive index of oil
-camerapixellength = 6.45; %Both cameras in the Lahav have pixel dimensions of 6.45 x 6.45 um.
-zstepsize = 0.25; %User defined with z-stack is obtained
-wavelength = .67; %Cy5 probe wavelength approximately 670 nanometers
+parameters.objective = 60; %as in 60x
+parameters.NA = 1.4; %typical of 60x oil immersion objections
+parameters.rindex = 1.51; %typical refractive index of oil
+parameters.camerapixellength = 6.45; %Both cameras in the Lahav have pixel dimensions of 6.45 x 6.45 um.
+parameters.zstepsize = 0.25; %User defined with z-stack is obtained
+parameters.wavelength = .67; %Cy5 probe wavelength approximately 670 nanometers
 
 %----- Parse varargin -----
 %'flatfieldpath' = 'path\2\files'
@@ -48,9 +48,11 @@ for i=1:length(stacknames)
     Name_temp = regexprep(Name_temp,'camera','','ignorecase'); %remove 'camera' if present b/c it is not informative
     stacknames2(i) = Name_temp;
 end
+parameters.stacknametest = [stackpath '\' stacknames{1}];
+    [IM,sizeOfImage] = variableInitialization(parameters);
 for bigInd = 1:length(stacknames)
     %----- Load the image file -----
-    IM = loadZstack([stackpath '\' stacknames{bigInd}]);
+    IM = loadZstack([stackpath '\' stacknames{bigInd}],IM,sizeOfImage);
     dataName = regexprep(stacknames2{bigInd},'(?<=_t)(\w*)(?=\.)','$1_data');
     dataName = regexp(dataName,'.*(?=\.)','match','once');
     sizeOfImage = size(IM); %#ok<NASGU>
@@ -447,21 +449,16 @@ end
 S(S<0)=0;
 end
 
-function [IM] = loadZstack(path)
-info = imfinfo(path,'tif');
+function [IM] = loadZstack(path,IM,s)
 t = Tiff(path,'r');
-IM_temp = t.read;
-[leny,lenx] = size(IM_temp);
-lenz = length(info);
-IM = zeros(leny,lenx,lenz);
-if lenz > 1
+if s(3) > 1
     for k=1:length(info)-1
         IM(:,:,k) = double(t.read);
         t.nextDirectory;
     end
 end
 %one last time without t.nextDirectory
-IM (:,:,lenz) = double(t.read);
+IM (:,:,s(3)) = double(t.read);
 t.close;
 end
 
@@ -486,7 +483,9 @@ Temp(i:end)=[];
 % end
 end
 
-function [] = variableInitialization()
-
+function [IM,sizeOfImage] = variableInitialization(parameters)
+info = imfinfo(parameters.stacknametest,'tif');
+sizeOfImage = [info(1).Length, info(1).Width, length(info)];
+IM = zeros(sizeOfImage);
 end
 
