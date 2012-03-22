@@ -3,13 +3,13 @@ function [] = smfishStackPreprocessing(stackpath,varargin)
 %create gaussian filter that approximates 3D PSF of the microscope.
 %Distance units are in micrometers.
 %----- Set Parameters -----
-flourescentChannel = 'Cy5'; %What channel had the FISH probes?
 objective = 60; %as in 60x
 NA = 1.4; %typical of 60x oil immersion objections
 rindex = 1.51; %typical refractive index of oil
 camerapixellength = 6.45; %Both cameras in the Lahav have pixel dimensions of 6.45 x 6.45 um.
 zstepsize = 0.25; %User defined with z-stack is obtained
 wavelength = .67; %Cy5 probe wavelength approximately 670 nanometers
+
 %----- Parse varargin -----
 %'flatfieldpath' = 'path\2\files'
 %'subtractbackground' = true
@@ -17,6 +17,7 @@ p = inputParser;
 p.addRequired('stackpath', @(x)ischar(x));
 p.addParamValue('flatfieldpath', '', @(x)ischar(x));
 p.addParamValue('subtractbackground', true, @(x)islogical(x));
+p.addParamValue('fluorchan','Cy5',@(x)ischar(x));
 p.parse(stackpath, varargin{:});
 %----- flatfield correction for each z-slice -----
 if ~isempty(p.Results.flatfieldpath)
@@ -36,7 +37,7 @@ mkdir(smfishstackpath);
 cd(smfishstackpath)
 smfishstackpath=pwd;
 %process only the stacks that contain single molecule FISH
-stacknames=importStackNames(dirCon_stack,flourescentChannel);
+stacknames=importStackNames(dirCon_stack,p.Results.fluorchan);
 stacknames2=stacknames; %I apologize for the really confusing file naming system.
 %This is part of a bug. This file expects the input filename to be of a
 %certain format. The following for-loop partially ensures the file names
@@ -143,16 +144,25 @@ for bigInd = 1:length(stacknames)
         index = index';
     end
     spotStat = spotStat(index);
+    IMMeanIntensity = IMMeanIntensity(index);
+    curvature = curvature(index);
     %The test statistic tends to vary over several orders of magnitude
     %therefore it is easier to compare these values in a log scale.
     spotStat = log(spotStat);
+    curvature = log(curvature);
     if isrow(spotStat)
         spotStat = spotStat';
+    end
+    if isrow(curvature)
+        curvature = curvature';
+    end
+    if isrow(IMMeanIntensity)
+        IMMeanIntensity = IMMeanIntensity';
     end
     if isrow(index)
         index = index';
     end
-    spotStat = [spotStat,index]; %#ok<AGROW>
+    spotStat = [spotStat,index,curvature,IMMeanIntensity]; %#ok<AGROW>
     spotStat = sortrows(spotStat,1);
     save(dataName,'spotStat','-append');
     %find a good guess for the threshold using the triangle threshold
@@ -215,8 +225,8 @@ for bigInd = 1:length(stacknames)
     
     %Create Max Projection of the input image
     maxProj = max(IM,[],3);
-    maxProj = maxProj - min(min(maxProj));
-    maxProj = maxProj*(2^8-1)/max(max(maxProj));
+    maxProj = uint16(maxProj);
+    maxProj = bitshift(maxProj, -4);
     Name = regexprep(stacknames2{bigInd},'(?<=_t)(\w*)(?=\.)','$1_maxProj');
     imwrite(uint8(maxProj),[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
     %Create Merged Color image
@@ -476,5 +486,7 @@ Temp(i:end)=[];
 % end
 end
 
+function [] = variableInitialization()
 
+end
 
