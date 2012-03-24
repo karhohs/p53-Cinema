@@ -49,13 +49,12 @@ for i=1:length(stacknames)
     stacknames2(i) = Name_temp;
 end
 parameters.stacknametest = [stackpath '\' stacknames{1}];
-    [IM,sizeOfImage] = variableInitialization(parameters);
+[IM,sizeOfImage,hLoG,tempI1,tempI2,hMeanxy,hMeanz,IMMeanIntensity,hGaus,xy,z] = variableInitialization(parameters);
 for bigInd = 1:length(stacknames)
     %----- Load the image file -----
     IM = loadZstack([stackpath '\' stacknames{bigInd}],IM,sizeOfImage);
     dataName = regexprep(stacknames2{bigInd},'(?<=_t)(\w*)(?=\.)','$1_data');
     dataName = regexp(dataName,'.*(?=\.)','match','once');
-    sizeOfImage = size(IM); %#ok<NASGU>
     save(dataName,'sizeOfImage');
     %----- background subtraction for each z-slice -----
     %I've heard that 3D deconvolution using an iterative blind-maximum-likehood
@@ -75,36 +74,12 @@ for bigInd = 1:length(stacknames)
         IM = JaredsBackground(IM);
     end
     %----- enhance diffraction limited spots using the LoG filter -----
-    sigmaXYos = 0.21*wavelength/NA; %lateral st. dev of the gaussian filter in object space
-    sigmaZos = 0.66*wavelength*rindex/(NA^2) ;%axial st. dev of the gaussian filter in object space
-    Pxy = camerapixellength/objective; %lateral pixel size
-    sigmaXY = sigmaXYos/Pxy; %lateral st. dev of gaussian filter in image space
-    sigmaZ = sigmaZos/zstepsize; %axial st. dev of gaussian filter in image space
-    xy = round(3*sigmaXY);
-    z = round(3*sigmaZ);
-    K = 1/((2*pi)^(3/2)*sqrt(sigmaXY^2*sigmaZ)); % log3d coefficient
-    log3d = @(x,y,z) K*exp(-0.5*(x^2/sigmaXY+y^2/sigmaXY+z^2/sigmaZ))*((x^2-4*sigmaXY)/(4*sigmaXY^2)+(y^2-4*sigmaXY)/(4*sigmaXY^2)+(z^2-4*sigmaZ)/(4*sigmaZ^2));
-    h = zeros(2*xy+1,2*xy+1,2*z+1);
-    for i=1:2*xy+1
-        for j=1:2*xy+1
-            for k=1:2*z+1
-                h(i,j,k) = log3d(i-1-xy,j-1-xy,k-1-z); %the 3D filter
-            end
-        end
-    end
-    %tune the filter so that it does not amplify the signal.
-    temp1 = ones(2*xy+1,2*xy+1,2*z+1);
-    h=-h; %otherwise the center weight, the largest weight, is negative.
-    temp2 = sum(sum(sum(temp1.*h)));
-    h=h/temp2;
-    clear temp1;
-    clear temp2;
-    IM = imfilter(IM,h,'symmetric'); %Totally works. sweet!
+    IM = imfilter(IM,hLoG,'symmetric'); %Totally works. sweet!
     %----- calculate the test statistics that will identify legit spots -----
     %%%Test Statistic 1: The 3D curvature. Gives a sense about how much a spot
     %resembles a point source of light. It gives a sense of the spots geometry
     %as opposed to the brightness of the spot.
-    curvature = mySobelHessianCurvature(IM);
+    curvature = mySobelHessianCurvature(IM,tempI1,tempI2);
     %A really large negative value indicates geometry like a point source. The
     %numbers produced are often extremely large and it may be a good idea to
     %normalize.
@@ -114,28 +89,19 @@ for bigInd = 1:length(stacknames)
     %%%Test Statistic 2: The mean brightness of the area. Indeed, we expect the
     %mRNA FISH signal to be brighter than the background. Taking the mean
     %reduces the weight of random peaks due to noise, since noise in these
-    %images is of the zero-mean type.
+    %images is of the zero-mean variety.
     %find local maxima
     fociCandidates = imregionalmax(IM,26);
     %Find the mean of a local volume that will capture an entire point source.
-    xy = round(4*sigmaXY);
-    z = round(4*sigmaZ);
-    IMPad = padarray(IM,[xy xy z],'symmetric');
-    fociCandidatesPad = padarray(fociCandidates,[xy xy z]);
-    index = find(fociCandidatesPad);
-    clear fociCandidatesPad;
-    s=size(IMPad);
-    IMMeanIntensity = zeros(s);
-    if iscolumn(index)
-        index = index';
+    for i=1:sizeOfImage(2)
+        tempI1(:,i,:) = imfilter(IM(:,i,:),hMeanz,'symmetric'); %z
     end
-    for i = index
-        [i2,j2,k2] = ind2sub(s,i);
-        localIntensityVolume=IMPad(i2-xy:i2+xy,j2-xy:j2+xy,k2-z:k2+z);
-        IMMeanIntensity(i) = mean(mean(mean(localIntensityVolume)));
+    for i=1:sizeOfImage(3)
+        tempI2(:,:,i) = imfilter(tempI1(:,:,i),hMeanxy,'symmetric'); %y
     end
-    clear IMPad; %clear up some memory
-    IMMeanIntensity = IMMeanIntensity(xy+1:end-xy,xy+1:end-xy,z+1:end-z);
+    for i=1:sizeOfImage(3)
+        IMMeanIntensity(:,:,i) = imfilter(tempI2(:,:,i),hMeanxy','symmetric'); %x
+    end
     %The final test statistic is the product of test statistic 1 and 2
     spotStat = IMMeanIntensity.*curvature;
     %----- Find a threshold that separates signal from noise -----
@@ -145,83 +111,62 @@ for bigInd = 1:length(stacknames)
     if iscolumn(index)
         index = index';
     end
-    spotStat = spotStat(index);
-    IMMeanIntensity = IMMeanIntensity(index);
-    curvature = curvature(index);
+    spotStat2 = spotStat(index);
+    IMMeanIntensity2 = IMMeanIntensity(index);
+    curvature2 = curvature(index);
     %The test statistic tends to vary over several orders of magnitude
     %therefore it is easier to compare these values in a log scale.
-    spotStat = log(spotStat);
-    curvature = log(curvature);
-    if isrow(spotStat)
-        spotStat = spotStat';
+    spotStat2 = log(spotStat2);
+    curvature2 = log(curvature2);
+    if isrow(spotStat2)
+        spotStat2 = spotStat2';
     end
-    if isrow(curvature)
-        curvature = curvature';
+    if isrow(curvature2)
+        curvature2 = curvature2';
     end
-    if isrow(IMMeanIntensity)
-        IMMeanIntensity = IMMeanIntensity';
+    if isrow(IMMeanIntensity2)
+        IMMeanIntensity2 = IMMeanIntensity2';
     end
     if isrow(index)
         index = index';
     end
-    spotStat = [spotStat,index,curvature,IMMeanIntensity]; %#ok<AGROW>
-    spotStat = sortrows(spotStat,1);
-    save(dataName,'spotStat','-append');
-    %find a good guess for the threshold using the triangle threshold
-    [threshold,n,xout,n2,xout2] = triminthresh(spotStat(:,1)); %#ok<NASGU,ASGLU>
+    spotStat3 = [spotStat2,index,curvature2,IMMeanIntensity2];
+    spotStat3 = sortrows(spotStat3,1);
+    save(dataName,'spotStat3','-append');
+    %find a good threshold
+    [threshold,n,xout,n2,xout2] = triminthresh(spotStat3(:,1)); %#ok<NASGU,ASGLU>
     save(dataName,'threshold','n','xout','n2','xout2','-append');
-    temp = spotStat(:,1)>threshold;
-    ind = find(temp,1,'first');
-    clear temp;
-    s = size(IM);
-    foci = zeros(s);
-    foci(spotStat(ind:end,2)) = 1;
-    fociarray = spotStat(ind:end,2);
+    ind = find(spotStat3(:,1)>threshold,1,'first');
+    foci = zeros(sizeOfImage);
+    foci(spotStat3(ind:end,2)) = 1;
+    fociarray = spotStat3(ind:end,2);
     save(dataName,'fociarray','-append');
-%----- Create the final image with bonafide spots and other aesthetic images -----
+    %----- Create the final image with bonafide spots and other aesthetic images -----
     %sum projection of foci
     sumProj = sum(foci,3);
     Name = regexprep(stacknames2{bigInd},'(?<=_t)(\w*)(?=\.)','$1_sumProj');
     imwrite(uint8(sumProj),[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
     %max project the stamp
-    xy = round(3*sigmaXY);
-    z = round(3*sigmaZ);
-    stampProj = zeros(size(foci));
-    stampProj = padarray(stampProj,[xy xy z],'symmetric');
+    stampProj3D = padarray(zeros(size(sizeOfImage)),[xy xy z],'symmetric');
     %gaussian stamp (approx. the PSF) on the sum projection of foci
-    %3D Gaussian Filter\Stamp\PSF approximation
-    mu = [0,0,0]; %zero mean gaussian
-    SIGMA = [sigmaXY,0,0;0,sigmaXY,0;0,0,sigmaZ];
-    h = zeros(2*xy+1,2*xy+1,2*z+1);
-    for i=1:2*xy+1
-        for j=1:2*xy+1
-            for k=1:2*z+1
-                h(i,j,k) = mvnpdf([i-1-xy,j-1-xy,k-1-z],mu,SIGMA); %the 3D filter
-            end
-        end
-    end
-    h=h*(2^5)/(max(max(max(h))));
     foci2 = padarray(foci,[xy xy z]);
     index = find(foci2);
     if iscolumn(index)
         index = index';
     end
     s = size(foci2);
-    clear foci2;
     for i=index
         [i2,j2,k2] = ind2sub(s,i);
-        stampProj(i2-xy:i2+xy,j2-xy:j2+xy,k2-z:k2+z) = stampProj(i2-xy:i2+xy,j2-xy:j2+xy,k2-z:k2+z) + h;
+        stampProj3D(i2-xy:i2+xy,j2-xy:j2+xy,k2-z:k2+z) = stampProj(i2-xy:i2+xy,j2-xy:j2+xy,k2-z:k2+z) + hGaus;
     end
-    stampProj = stampProj(xy+1:end-xy,xy+1:end-xy,z+1:end-z);
-    s = size(stampProj);
+    stampProj3D = stampProj3D(xy+1:end-xy,xy+1:end-xy,z+1:end-z);
     %Save the 3D image
     %     Name = regexprep(stacknames2{bigInd},'(?<=_t)(\w*)(?=\.)','$1_stampProj3D');
-    %     s=size(stampProj);
-    %     for i = 1:s(3)
+    %     for i = 1:sizeOfImage(3)
     %         imwrite(uint8(stampProj(:,:,i)),[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
     %     end
     %Project the 3D image into 2D
-    stampProj = sum(stampProj,3);
+    stampProj = sum(stampProj3D,3);
     Name = regexprep(stacknames2{bigInd},'(?<=_t)(\w*)(?=\.)','$1_stampProj');
     imwrite(uint8(stampProj),[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
     
@@ -238,7 +183,7 @@ for bigInd = 1:length(stacknames)
     maxProj2(:,:,2) = maxProj;
     maxProj2(:,:,3) = maxProj;
     for i = 1:length(fociarray)
-        [y2,x2,~] = ind2sub(s,fociarray(i));
+        [y2,x2,~] = ind2sub(sizeOfImage,fociarray(i));
         maxProj2(y2,x2,:) = [255 0 0];
     end
     Name = regexprep(stacknames2{bigInd},'(?<=_t)(\w*)(?=\.)','$1_ColorMerge');
@@ -249,7 +194,7 @@ for bigInd = 1:length(stacknames)
 end
 end
 
-function [curvature] = mySobelHessianCurvature(I)
+function [curvature] = mySobelHessianCurvature(I,tempI1,tempI2)
 %This function uses the Sobel filter to approximate the derivatives in a
 %gradient. Since the sobel filter is seperable the it can also be
 %conveniently extended to find the Hessian.
@@ -257,8 +202,6 @@ function [curvature] = mySobelHessianCurvature(I)
 h1 = [0.25 0.5 0.25];
 h2 = [-0.5 0 0.5];
 [~,sx,sz] = size(I);
-tempI1 = zeros(size(I));
-tempI2 = zeros(size(I));
 %The Sobel separted filters to find the Fx
 Fx = zeros(size(I));
 for i=1:sx
@@ -452,7 +395,7 @@ end
 function [IM] = loadZstack(path,IM,s)
 t = Tiff(path,'r');
 if s(3) > 1
-    for k=1:length(info)-1
+    for k=1:s(3)-1
         IM(:,:,k) = double(t.read);
         t.nextDirectory;
     end
@@ -483,9 +426,52 @@ Temp(i:end)=[];
 % end
 end
 
-function [IM,sizeOfImage] = variableInitialization(parameters)
-info = imfinfo(parameters.stacknametest,'tif');
-sizeOfImage = [info(1).Length, info(1).Width, length(info)];
+function [IM,sizeOfImage,hLoG,tempI1,tempI2,hMeanxy,hMeanz,IMMeanIntensity,hGaus,xy,z] = variableInitialization(p)
+info = imfinfo(p.stacknametest,'tif');
+sizeOfImage = [info(1).Height, info(1).Width, length(info)];
+
 IM = zeros(sizeOfImage);
+tempI1 = zeros(sizeOfImage);
+tempI2 = zeros(sizeOfImage);
+IMMeanIntensity = zeros(sizeOfImage);
+sigmaXYos = 0.21*p.wavelength/p.NA; %lateral st. dev of the gaussian filter in object space
+sigmaZos = 0.66*p.wavelength*p.rindex/(p.NA^2) ;%axial st. dev of the gaussian filter in object space
+Pxy = p.camerapixellength/p.objective; %lateral pixel size
+sigmaXY = sigmaXYos/Pxy; %lateral st. dev of gaussian filter in image space
+sigmaZ = sigmaZos/p.zstepsize; %axial st. dev of gaussian filter in image space
+xy = round(3*sigmaXY);
+z = round(3*sigmaZ);
+xyMLV = round(4*sigmaXY);
+zMLV = round(4*sigmaZ);
+K = 1/((2*pi)^(3/2)*sqrt(sigmaXY^2*sigmaZ)); % log3d coefficient
+log3d = @(x,y,z) K*exp(-0.5*(x^2/sigmaXY+y^2/sigmaXY+z^2/sigmaZ))*((x^2-4*sigmaXY)/(4*sigmaXY^2)+(y^2-4*sigmaXY)/(4*sigmaXY^2)+(z^2-4*sigmaZ)/(4*sigmaZ^2));
+hLoG = zeros(2*xy+1,2*xy+1,2*z+1);
+for i=1:2*xy+1
+    for j=1:2*xy+1
+        for k=1:2*z+1
+            hLoG(i,j,k) = log3d(i-1-xy,j-1-xy,k-1-z); %the 3D filter
+        end
+    end
+end
+%tune the filter so that it does not amplify the signal.
+temp1 = ones(2*xy+1,2*xy+1,2*z+1);
+hLoG=-hLoG; %otherwise the center weight, the largest weight, is negative.
+temp2 = sum(sum(sum(temp1.*hLoG)));
+hLoG=hLoG/temp2;
+K2=1/(xyMLV*xyMLV*zMLV);
+hMeanxy=ones(1,xyMLV);
+hMeanz=K2*ones(1,zMLV);
+%3D Gaussian Filter\Stamp\PSF approximation
+mu = [0,0,0]; %zero mean gaussian
+SIGMA = [sigmaXY,0,0;0,sigmaXY,0;0,0,sigmaZ];
+hGaus = zeros(2*xy+1,2*xy+1,2*z+1);
+for i=1:2*xy+1
+    for j=1:2*xy+1
+        for k=1:2*z+1
+            hGaus(i,j,k) = mvnpdf([i-1-xy,j-1-xy,k-1-z],mu,SIGMA); %the 3D filter
+        end
+    end
+end
+hGaus=hGaus*(2^5)/(max(max(max(hGaus))));
 end
 
