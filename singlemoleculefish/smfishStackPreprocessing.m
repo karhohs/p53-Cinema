@@ -49,7 +49,7 @@ for i=1:length(stacknames)
     stacknames2(i) = Name_temp;
 end
 parameters.stacknametest = [stackpath '\' stacknames{1}];
-[IM,sizeOfImage,hLoG,tempI1,tempI2,hMeanxy,hMeanz,IMMeanIntensity,hGaus,xy,z] = variableInitialization(parameters);
+[IM,sizeOfImage,hLoG,tempI1,tempI2,hMeanxy,hMeanz,IMMeanIntensity,hGaus,xy,z,pixelRatio] = variableInitialization(parameters);
 for bigInd = 1:length(stacknames)
     %----- Load the image file -----
     IM = loadZstack([stackpath '\' stacknames{bigInd}],IM,sizeOfImage);
@@ -79,7 +79,7 @@ for bigInd = 1:length(stacknames)
     %%%Test Statistic 1: The 3D curvature. Gives a sense about how much a spot
     %resembles a point source of light. It gives a sense of the spots geometry
     %as opposed to the brightness of the spot.
-    curvature = mySobelHessianCurvature(IM,tempI1,tempI2);
+    curvature = mySobelHessianCurvature(IM,tempI1,tempI2,pixelRatio);
     %A really large negative value indicates geometry like a point source. The
     %numbers produced are often extremely large and it may be a good idea to
     %normalize.
@@ -147,7 +147,7 @@ for bigInd = 1:length(stacknames)
     Name = regexprep(stacknames2{bigInd},'(?<=_t)(\w*)(?=\.)','$1_sumProj');
     imwrite(uint8(sumProj),[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
     %max project the stamp
-    stampProj3D = padarray(zeros(size(sizeOfImage)),[xy xy z],'symmetric');
+    stampProj3D = padarray(zeros(sizeOfImage),[xy xy z],'symmetric');
     %gaussian stamp (approx. the PSF) on the sum projection of foci
     foci2 = padarray(foci,[xy xy z]);
     index = find(foci2);
@@ -157,16 +157,16 @@ for bigInd = 1:length(stacknames)
     s = size(foci2);
     for i=index
         [i2,j2,k2] = ind2sub(s,i);
-        stampProj3D(i2-xy:i2+xy,j2-xy:j2+xy,k2-z:k2+z) = stampProj(i2-xy:i2+xy,j2-xy:j2+xy,k2-z:k2+z) + hGaus;
+        stampProj3D(i2-xy:i2+xy,j2-xy:j2+xy,k2-z:k2+z) = stampProj3D(i2-xy:i2+xy,j2-xy:j2+xy,k2-z:k2+z) + hGaus;
     end
-    stampProj3D = stampProj3D(xy+1:end-xy,xy+1:end-xy,z+1:end-z);
+    stampProj3D2 = stampProj3D(xy+1:end-xy,xy+1:end-xy,z+1:end-z);
     %Save the 3D image
     %     Name = regexprep(stacknames2{bigInd},'(?<=_t)(\w*)(?=\.)','$1_stampProj3D');
     %     for i = 1:sizeOfImage(3)
     %         imwrite(uint8(stampProj(:,:,i)),[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
     %     end
     %Project the 3D image into 2D
-    stampProj = sum(stampProj3D,3);
+    stampProj = sum(stampProj3D2,3);
     Name = regexprep(stacknames2{bigInd},'(?<=_t)(\w*)(?=\.)','$1_stampProj');
     imwrite(uint8(stampProj),[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
     
@@ -192,20 +192,31 @@ for bigInd = 1:length(stacknames)
     %[y2,x2,z2] = ind2sub(s,fociarray);
     %scatter3(x2,y2,z2)
 end
+signalCompletionWithEmail();
+%signalCompletionWithSound();
 end
 
-function [curvature] = mySobelHessianCurvature(I,tempI1,tempI2)
+function [tempI1] = mySobelHessianCurvature(I,tempI1,tempI2,pixelRatio)
 %This function uses the Sobel filter to approximate the derivatives in a
 %gradient. Since the sobel filter is seperable the it can also be
 %conveniently extended to find the Hessian.
 %The image I is 3D and has coordinates (y,x,z).
 h1 = [0.25 0.5 0.25];
 h2 = [-0.5 0 0.5];
-[~,sx,sz] = size(I);
-%The Sobel separted filters to find the Fx
+h2z = h2/pixelRatio;
+[sy,sx,sz] = size(I);
 Fx = zeros(size(I));
+Fy = zeros(size(I));
+Fz = zeros(size(I));
+Fxx = zeros(size(I));
+Fxy = zeros(size(I));
+Fxz = zeros(size(I));
+Fyy = zeros(size(I));
+Fyz = zeros(size(I));
+Fzz = zeros(size(I));
+%The Sobel separted filters to find the Fx
 for i=1:sx
-    tempI1(:,i,:) = imfilter(I(:,i,:),h1,'symmetric'); %z
+    tempI1(:,i,:) = imfilter(reshape(I(:,i,:),[sy sz]),h1,'symmetric'); %z
 end
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h1,'symmetric'); %y
@@ -214,9 +225,8 @@ for i=1:sz
     Fx(:,:,i) = imfilter(tempI2(:,:,i),h2','symmetric'); %x
 end
 %The Sobel separted filters to find the Fy
-Fy = zeros(size(I));
 for i=1:sx
-    tempI1(:,i,:) = imfilter(I(:,i,:),h1,'symmetric'); %z
+    tempI1(:,i,:) = imfilter(reshape(I(:,i,:),[sy sz]),h1,'symmetric'); %z
 end
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h2,'symmetric'); %y
@@ -225,9 +235,8 @@ for i=1:sz
     Fy(:,:,i) = imfilter(tempI2(:,:,i),h1','symmetric'); %x
 end
 %The Sobel separted filters to find the Fz
-Fz = zeros(size(I));
 for i=1:sx
-    tempI1(:,i,:) = imfilter(I(:,i,:),h2,'symmetric'); %z
+    tempI1(:,i,:) = imfilter(reshape(I(:,i,:),[sy sz]),h2z,'symmetric'); %z
 end
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h1,'symmetric'); %y
@@ -236,9 +245,8 @@ for i=1:sz
     Fz(:,:,i) = imfilter(tempI2(:,:,i),h1','symmetric'); %x
 end
 %The Sobel separted filters to find the Fxx
-Fxx = zeros(size(I));
 for i=1:sx
-    tempI1(:,i,:) = imfilter(Fx(:,i,:),h1,'symmetric'); %z
+    tempI1(:,i,:) = imfilter(reshape(Fx(:,i,:),[sy sz]),h1,'symmetric'); %z
 end
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h1,'symmetric'); %y
@@ -247,31 +255,28 @@ for i=1:sz
     Fxx(:,:,i) = imfilter(tempI2(:,:,i),h2','symmetric'); %x
 end
 %The Sobel separted filters to find the Fxy
-Fxy = zeros(size(I));
 for i=1:sx
-    tempI1(:,i,:) = imfilter(Fx(:,i,:),h1,'symmetric'); %z
+    tempI1(:,i,:) = imfilter(reshape(Fx(:,i,:),[sy sz]),h1,'symmetric'); %z
 end
 for i=1:sz
-    tempI2(:,:,i) = imfilter(tempI1(:,:,i),h1,'symmetric'); %y
+    tempI2(:,:,i) = imfilter(tempI1(:,:,i),h2,'symmetric'); %y
 end
 for i=1:sz
-    Fxy(:,:,i) = imfilter(tempI2(:,:,i),h2','symmetric'); %x
+    Fxy(:,:,i) = imfilter(tempI2(:,:,i),h1','symmetric'); %x
 end
 %The Sobel separted filters to find the Fxz
-Fxz = zeros(size(I));
 for i=1:sx
-    tempI1(:,i,:) = imfilter(Fx(:,i,:),h1,'symmetric'); %z
+    tempI1(:,i,:) = imfilter(reshape(Fx(:,i,:),[sy sz]),h2z,'symmetric'); %z
 end
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h1,'symmetric'); %y
 end
 for i=1:sz
-    Fxz(:,:,i) = imfilter(tempI2(:,:,i),h2','symmetric'); %x
+    Fxz(:,:,i) = imfilter(tempI2(:,:,i),h1','symmetric'); %x
 end
 %The Sobel separted filters to find the Fyy
-Fyy = zeros(size(I));
 for i=1:sx
-    tempI1(:,i,:) = imfilter(Fy(:,i,:),h1,'symmetric'); %z
+    tempI1(:,i,:) = imfilter(reshape(Fy(:,i,:),[sy sz]),h1,'symmetric'); %z
 end
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h2,'symmetric'); %y
@@ -280,20 +285,18 @@ for i=1:sz
     Fyy(:,:,i) = imfilter(tempI2(:,:,i),h1','symmetric'); %x
 end
 %The Sobel separted filters to find the Fyz
-Fyz = zeros(size(I));
 for i=1:sx
-    tempI1(:,i,:) = imfilter(Fy(:,i,:),h1,'symmetric'); %z
+    tempI1(:,i,:) = imfilter(reshape(Fy(:,i,:),[sy sz]),h2z,'symmetric'); %z
 end
 for i=1:sz
-    tempI2(:,:,i) = imfilter(tempI1(:,:,i),h2,'symmetric'); %y
+    tempI2(:,:,i) = imfilter(tempI1(:,:,i),h1,'symmetric'); %y
 end
 for i=1:sz
     Fyz(:,:,i) = imfilter(tempI2(:,:,i),h1','symmetric'); %x
 end
 %The Sobel separted filters to find the Fzz
-Fzz = zeros(size(I));
 for i=1:sx
-    tempI1(:,i,:) = imfilter(Fz(:,i,:),h2,'symmetric'); %z
+    tempI1(:,i,:) = imfilter(reshape(Fz(:,i,:),[sy sz]),h2z,'symmetric'); %z
 end
 for i=1:sz
     tempI2(:,:,i) = imfilter(tempI1(:,:,i),h1,'symmetric'); %y
@@ -302,9 +305,6 @@ for i=1:sz
     Fzz(:,:,i) = imfilter(tempI2(:,:,i),h1','symmetric'); %x
 end
 %Find the curvature matrix
-clear tempI1;
-clear tempI2;
-curvature = zeros(size(I));
 myHessian = zeros(3);
 for i = 1:numel(I)
     myHessian(1,1) = Fxx(i);
@@ -316,7 +316,7 @@ for i = 1:numel(I)
     myHessian(3,1) = Fxz(i);
     myHessian(3,2) = Fyz(i);
     myHessian(3,3) = Fzz(i);
-    curvature(i) = det(myHessian);
+    tempI1(i) = det(myHessian);
 end
 end
 
@@ -374,17 +374,17 @@ end
 
 function [S] = JaredsBackground(S)
 resizeMultiplier = 1/2; % Downsampling scale factor makes image processing go faster and smooths image
-seSize = 10; % I find the value of 10 works well with 60x, binning 1, mRNA FISH images
-se = strel('disk', seSize*resizeMultiplier);  %Structing elements are necessary for using MATLABS image processing functions
+seSize2 = 20; % I find the value of 10 works well with 60x, binning 1, mRNA FISH images
+se2 = strel('disk', seSize2*resizeMultiplier);  %Structing elements are necessary for using MATLABS image processing functions
 origSize  = size(S);
 for k=1:origSize(3)
     % Rescale image and compute background using closing/opening.
     I    = imresize(S(:,:,k), resizeMultiplier);
-    pad   = ceil(seSize*resizeMultiplier);
+    pad   = ceil(seSize2*resizeMultiplier);
     % Pad image with a reflection so that borders don't introduce artifacts
     I    = padarray(I, [pad,pad], 'symmetric', 'both');
     % Perform opening/closing to get background
-    I     = imopen(I, se);     % ignore high-intensity features typical of mRNA spots
+    I     = imopen(I, se2);     % ignore high-intensity features typical of mRNA spots
     % Remove padding and resize
     I     = floor(imresize(I(pad+1:end-pad, pad+1:end-pad), origSize(1:2)));
     S(:,:,k) = S(:,:,k) - I;
@@ -426,7 +426,7 @@ Temp(i:end)=[];
 % end
 end
 
-function [IM,sizeOfImage,hLoG,tempI1,tempI2,hMeanxy,hMeanz,IMMeanIntensity,hGaus,xy,z] = variableInitialization(p)
+function [IM,sizeOfImage,hLoG,tempI1,tempI2,hMeanxy,hMeanz,IMMeanIntensity,hGaus,xy,z,pixelRatio] = variableInitialization(p)
 info = imfinfo(p.stacknametest,'tif');
 sizeOfImage = [info(1).Height, info(1).Width, length(info)];
 
@@ -473,5 +473,19 @@ for i=1:2*xy+1
     end
 end
 hGaus=hGaus*(2^5)/(max(max(max(hGaus))));
+pixelRatio = sigmaZ/sigmaXY;
 end
 
+function [] = signalCompletionWithSound()
+[y, Fs] = wavread('ChronoTrigger.wav');
+sound(y,Fs);
+end
+
+function [] = signalCompletionWithEmail()
+% Send the email
+sendmail('gandalfisarockstar@gmail.com', 'Mail from MATLAB', ...
+    'Hi Kyle! Your MATLAB run is complete!')
+% sendmail('gandalfisarockstar@gmail.com', 'Mail from MATLAB', ...
+%     'Hi Kyle! Your MATLAB run is complete!', ...
+%     {'sub_folder/signals.m', 'system.mdl'})
+end
