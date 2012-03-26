@@ -193,7 +193,7 @@ for bigInd = 1:length(stacknames)
     %scatter3(x2,y2,z2)
 end
 signalCompletionWithEmail();
-signalCompletionWithSound();
+%signalCompletionWithSound();
 end
 
 function [tempI1] = mySobelHessianCurvature(I,tempI1,tempI2,pixelRatio)
