@@ -427,6 +427,8 @@ Temp(i:end)=[];
 end
 
 function [IM,sizeOfImage,hLoG,tempI1,tempI2,hMeanxy,hMeanz,IMMeanIntensity,hGaus,xy,z,pixelRatio] = variableInitialization(p)
+%This function was made in a effort to speed things up. I'm not sure it did
+%that. It may have just made the code more difficult to read.
 info = imfinfo(p.stacknametest,'tif');
 sizeOfImage = [info(1).Height, info(1).Width, length(info)];
 
