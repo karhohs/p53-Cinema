@@ -477,7 +477,7 @@ pixelRatio = sigmaZ/sigmaXY;
 end
 
 function [] = signalCompletionWithSound()
-[y, Fs] = wavread('ChronoTrigger.wav');
+[y, Fs] = wavread('completion.wav');
 sound(y,Fs);
 end
 
