@@ -406,7 +406,7 @@ t.close;
 end
 
 function [Temp] = importStackNames(dirCon_stack,fc)
-expr=['.*_w\d+' fc '.*_s\d+.*_t.*\.tif'];
+expr=['.*_w\d+' fc '.*'];
 Temp=cell([1,length(dirCon_stack)]); %Initialize cell array
 % ----- Identify the legitimate stacks -----
 i=1;
