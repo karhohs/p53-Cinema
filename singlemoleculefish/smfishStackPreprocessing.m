@@ -94,7 +94,7 @@ for bigInd = 1:length(stacknames)
     fociCandidates = imregionalmax(IM,26);
     %Find the mean of a local volume that will capture an entire point source.
     for i=1:sizeOfImage(2)
-        tempI1(:,i,:) = imfilter(IM(:,i,:),hMeanz,'symmetric'); %z
+        tempI1(:,i,:) = imfilter(reshape(IM(:,i,:),[sizeOfImage(1), sizeOfImage(3)]),hMeanz,'symmetric'); %z
     end
     for i=1:sizeOfImage(3)
         tempI2(:,:,i) = imfilter(tempI1(:,:,i),hMeanxy,'symmetric'); %y
@@ -193,7 +193,7 @@ for bigInd = 1:length(stacknames)
     %scatter3(x2,y2,z2)
 end
 signalCompletionWithEmail();
-%signalCompletionWithSound();
+signalCompletionWithSound();
 end
 
 function [tempI1] = mySobelHessianCurvature(I,tempI1,tempI2,pixelRatio)
@@ -374,7 +374,7 @@ end
 
 function [S] = JaredsBackground(S)
 resizeMultiplier = 1/2; % Downsampling scale factor makes image processing go faster and smooths image
-seSize2 = 20; % I find the value of 10 works well with 60x, binning 1, mRNA FISH images
+seSize2 = 10; % I find the value of 10 works well with 60x, binning 1, mRNA FISH images
 se2 = strel('disk', seSize2*resizeMultiplier);  %Structing elements are necessary for using MATLABS image processing functions
 origSize  = size(S);
 for k=1:origSize(3)
