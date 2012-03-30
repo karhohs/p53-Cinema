@@ -144,7 +144,7 @@ for bigInd = 1:length(stacknames)
     %----- Create the final image with bonafide spots and other aesthetic images -----
     %sum projection of foci
     sumProj = sum(foci,3);
-    Name = regexprep(stacknames2{bigInd},'(?<=_t)(\w*)(?=\.)','$1_sumProj');
+    Name = regexprep(stacknames2{bigInd},'(\w*)(?=\.)','$1_sumProj');
     imwrite(uint8(sumProj),[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
     %max project the stamp
     stampProj3D = padarray(zeros(sizeOfImage),[xy xy z],'symmetric');
@@ -167,14 +167,14 @@ for bigInd = 1:length(stacknames)
     %     end
     %Project the 3D image into 2D
     stampProj = sum(stampProj3D2,3);
-    Name = regexprep(stacknames2{bigInd},'(?<=_t)(\w*)(?=\.)','$1_stampProj');
+    Name = regexprep(stacknames2{bigInd},'(\w*)(?=\.)','$1_stampProj');
     imwrite(uint8(stampProj),[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
     
     %Create Max Projection of the input image
     maxProj = max(IM,[],3);
     maxProj = uint16(maxProj);
     maxProj = bitshift(maxProj, -4);
-    Name = regexprep(stacknames2{bigInd},'(?<=_t)(\w*)(?=\.)','$1_maxProj');
+    Name = regexprep(stacknames2{bigInd},'(\w*)(?=\.)','$1_maxProj');
     imwrite(uint8(maxProj),[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
     %Create Merged Color image
     [s1 s2] = size(maxProj);
@@ -186,14 +186,14 @@ for bigInd = 1:length(stacknames)
         [y2,x2,~] = ind2sub(sizeOfImage,fociarray(i));
         maxProj2(y2,x2,:) = [255 0 0];
     end
-    Name = regexprep(stacknames2{bigInd},'(?<=_t)(\w*)(?=\.)','$1_ColorMerge');
+    Name = regexprep(stacknames2{bigInd},'(\w*)(?=\.)','$1_ColorMerge');
     imwrite(uint8(maxProj2),[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
     %3D scatter plot
     %[y2,x2,z2] = ind2sub(s,fociarray);
     %scatter3(x2,y2,z2)
 end
 signalCompletionWithEmail();
-%signalCompletionWithSound();
+signalCompletionWithSound();
 end
 
 function [tempI1] = mySobelHessianCurvature(I,tempI1,tempI2,pixelRatio)
@@ -374,7 +374,7 @@ end
 
 function [S] = JaredsBackground(S)
 resizeMultiplier = 1/2; % Downsampling scale factor makes image processing go faster and smooths image
-seSize2 = 10; % I find the value of 10 works well with 60x, binning 1, mRNA FISH images
+seSize2 = 25; % I find the value of 25 works well with 60x, binning 1, mRNA FISH images
 se2 = strel('disk', seSize2*resizeMultiplier);  %Structing elements are necessary for using MATLABS image processing functions
 origSize  = size(S);
 for k=1:origSize(3)
