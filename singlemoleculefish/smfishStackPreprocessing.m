@@ -374,7 +374,7 @@ end
 
 function [S] = JaredsBackground(S)
 resizeMultiplier = 1/2; % Downsampling scale factor makes image processing go faster and smooths image
-seSize2 = 25; % I find the value of 25 works well with 60x, binning 1, mRNA FISH images
+seSize2 = 26; % I find the value of 25 works well with 60x, binning 1, mRNA FISH images
 se2 = strel('disk', seSize2*resizeMultiplier);  %Structing elements are necessary for using MATLABS image processing functions
 origSize  = size(S);
 for k=1:origSize(3)
