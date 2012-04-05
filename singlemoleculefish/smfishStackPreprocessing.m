@@ -173,10 +173,11 @@ for bigInd = 1:length(stacknames)
     %Create Max Projection of the input image
     maxProj = max(IM,[],3);
     maxProj = uint16(maxProj);
-    maxProj = bitshift(maxProj, -4);
     Name = regexprep(stacknames2{bigInd},'(\w*)(?=\.)','$1_maxProj');
-    imwrite(uint8(maxProj),[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
+    imwrite(uint16(maxProj),[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
     %Create Merged Color image
+    maxProj = bitshift(maxProj, -4);
+    maxProj = uint8(maxProj);
     [s1 s2] = size(maxProj);
     maxProj2 = zeros(s1,s2,3);
     maxProj2(:,:,1) = maxProj;
