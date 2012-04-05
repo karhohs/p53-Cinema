@@ -331,7 +331,6 @@ myIQRa = q3a-q1a;
 myCutoffa = 3*myIQRa+q2a;
 %Create the histogram
 [n,xout]=hist(A,100);
-plot(xout,n)
 %Use the triangle threshold for the initial guess
 ind = triangleThreshCore(n);
 threshold = xout(ind);
@@ -386,8 +385,13 @@ while logicStepCounter ~= 0
             %Repeat the triangle threshold method
             C = B(B>putativeSignalPeak);
             [n3,xout3] = hist(C,100);
+            ind = triangleThreshCore(n3);
+            threshold = xout3(ind);
+            C = B(B>threshold);
+            [n3,xout3] = hist(C,100);
             n3der = smooth(n3);
             n3der = conv(n3der,[0.5 0 -0.5],'same'); %the central difference derivative to find the min
+            n3der = smooth(n3der);
             for i = 2:length(n3der);
                 if (n3der(i-1)<0 && n3der(i)>=0)
                         ind = i-1;
