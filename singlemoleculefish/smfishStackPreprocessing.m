@@ -38,6 +38,10 @@ cd(smfishstackpath)
 smfishstackpath=pwd;
 %process only the stacks that contain single molecule FISH
 stacknames=importStackNames(dirCon_stack,p.Results.fluorchan);
+if isempty(stacknames)
+    disp('Did not find any z-stacks of the specified fluorescent channel.')
+    return
+end
 stacknames2=stacknames; %I apologize for the really confusing file naming system.
 %This is part of a bug. This file expects the input filename to be of a
 %certain format. The following for-loop partially ensures the file names
