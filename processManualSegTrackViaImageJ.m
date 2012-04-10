@@ -1,67 +1,48 @@
 function [reltime,time,meanGreyVal] = processManualSegTrackViaImageJ(logpath,stackpath,channel,timeref)
-% [] = my_tiffStacker(path,positions,timepoints)
+% [] = processManualSegTrackViaImageJ()
 % Input:
-% path: a char. The path to the folder that contains the raw TIFF images from
-% imageJ.
-% positions (optional): an array of positive integers. The integers in this array represent the
-% positions for which stacks will be created.
-% timepoints (optional): a cell containing arrays of positive integers or
-% an array of positive integers. If it is a cell, then it must contain an
-% array for each position. If it is an array, only these timepoints will be
-% taken for each position.
+% 
 %
 % Output:
-% There is no direct argument output. Rather, stacks will be created from the
-% raw images and stored in a new directory called "Stacks" at the same
-% level as the path/ directory.
+% 
 %
 % Description:
-% When an image is created in Metamorph's Multi-Dimensional-Acquisition it
-% is saved in the TIFF format. An inividual image is created for each each
-% stage position, wavelength, and timepoint. If z-positions are taken then
-% the individual images are instead stacks of z-positions.
-% When metamorph saves a .tif the filename has the following formats:
-% Multi-dim. Aq. = <user defined input>_w\d+<channel name>_s\d+_t\d+.tif
-% Slide Scan = <user defined input>_w\d+_s\d+_t\d+.tif
-% '_w' is the wavelength
-% '_s' is the stage position
-% '_t' is the time point (slidescan always has '_t1'; can it take time pts?)
-% This function collates the images of each position and wavelength into a
-% TIFF stack, because this format was necessary to view the images in
-% ImageJ and enable manual segmentation of the individual cells.
+% 
 %
 % Other Notes:
-% It is often convenient to analyze z-stacks using maximum intensity
-% projection (MIP). This projects a 3D object onto a 2D plane that can then
-% be analyzed with existing 2D image processing techiniques.
-
-%Load divisions file
+% 
+p = inputParser;
+p.addRequired('logpath', @(x)ischar(x));
+p.addRequired('stackpath', @(x)ischar(x));
+p.addParamValue('fluorchan','YFP',@(x)ischar(x));
+p.parse(logpath, stackpath, varargin{:});
+%----- Load divisions file -----
 %first, find the divisions file.
 dirConLogs = dir(logpath);
 for i=1:length(dirConLogs)
-    [mat, tok] = regexp(dirConLogs(i).name,'divisions\.(\w+)','match','tokens');
-    if ~isempty(mat)
+    [logFile, tok] = regexpi(dirConLogs(i).name,'divisions\.(\w+)','match','tokens','once');
+    if ~isempty(logFile)
         temp = true;
         break
     end
 end
-if temp == false
+if temp == false %does the division file exist
     error('manSeg:noDiv',['The ', logpath, ' directory does not contain a divisions file']);
 end
 %second, check if it is MS xlsx OR just plain .txt
-switch tok
+switch tok{1}
     %if text, read the data into a cell
     case 'txt'
-        error('manSeg:divTxt','The feature to parse text files is incomplete. Please create a MS Excel file.');
+        error('manSeg:divTxt','The feature to parse text files is incomplete. Please create an MS Excel file.');
         %if xlsx, collect the raw data
     case {'xls','xlsx'}
-        [div_num,div_txt,~] = xlsread();
+        [log_num,log_txt,~] = xlsread(fullfile(logpath,logFile));
     otherwise
         error('manSeg:divExt','The divisions file format is unrecognized. Please create a .txt or MS Excel file.');
 end
 %Identify the stacks of images that contain the cells of interest
-pos_ind = strcmpi('position',div_txt);
-position_temp = div_num(:,pos_ind);
+pos_ind = strcmpi('position',log_txt);
+position_temp = log_num(:,pos_ind);
 position = unique(position_temp);
 %Sort the cells by their image origin into a MATLAB-cell
 ceTable = cell(size(position));
