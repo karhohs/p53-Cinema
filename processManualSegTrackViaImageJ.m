@@ -1,20 +1,22 @@
-function [reltime,time,meanGreyVal] = processManualSegTrackViaImageJ(logpath,stackpath,channel,timeref)
+function [reltime,time,meanGreyVal] = processManualSegTrackViaImageJ(logpath,stackpath,varargin)
 % [] = processManualSegTrackViaImageJ()
 % Input:
-% 
+%
 %
 % Output:
-% 
+%
 %
 % Description:
-% 
+%
 %
 % Other Notes:
-% 
+%
 p = inputParser;
 p.addRequired('logpath', @(x)ischar(x));
 p.addRequired('stackpath', @(x)ischar(x));
 p.addParamValue('fluorchan','YFP',@(x)ischar(x));
+p.addParamValue('timeReference','',@(x)ischar(x));
+p.addParamValue('timeUnits','hours',@(x)ischar(x));
 p.parse(logpath, stackpath, varargin{:});
 %----- Load divisions file -----
 %first, find the divisions file.
@@ -40,21 +42,54 @@ switch tok{1}
     otherwise
         error('manSeg:divExt','The divisions file format is unrecognized. Please create a .txt or MS Excel file.');
 end
-%Identify the stacks of images that contain the cells of interest
+%How many cell tracks are there?
+numberOfCells = size(log_num,1);
+%Initialize the struct that holds all the cellular information
+unitOfLife = struct('timePoints', {}, 'time', {}, 'nucleusArea', {}, 'cytoplasmArea', {}, 'meanIntensity', {},'parent', {}, 'nuclearSolidity', {}, 'divisionTime', {}, 'manualCentroid', {}, 'major', {},'minor', {}, 'angle', {},'centroid', {},'velocity', {}, 'uid', {}, 'originImage', {});
+unitOfLife(numberOfCells).time = []; %initialize the struct
+%Import all of the pertinent manual segmentation and tracking information
+%from a folder of text files into the unitOfLife struct.
 pos_ind = strcmpi('position',log_txt);
-position_temp = log_num(:,pos_ind);
-position = unique(position_temp);
-%Sort the cells by their image origin into a MATLAB-cell
-ceTable = cell(size(position));
-ce_ind = strcmpi('cell',div_txt);
-ce_temp = div_num(:,ce_ind);
-for i=1:length(ceTable)
-    ceTable{i} = ce_temp(position_temp==position(i));
+pos_all = log_num(:,pos_ind);
+pos_unique = unique(pos_all);
+uol_ind = strcmpi('cell',log_txt);
+uol_all = log_num(:,uol_ind);
+dirConLogsArray = 1:length(dirConLogs);
+for j=1:numberOfCells
+    %find the text file holding the segmentation and tracking info
+    pos = pos_all(j);
+    uol = uol_all(j);
+    counter = 0;
+    for k=dirConLogsArray
+        counter = counter+1;
+        temp = regexpi(dirConLogs(k).name,'(?<=pos)(\d+)\.(\d+)','tokens');
+        if isempty(temp)
+            continue
+        end
+        posnum = str2double(temp{1}(1));
+        uolnum = str2double(temp{1}(2));
+        clear temp;
+        if (posnum == pos) && (uolnum == uol)
+            filename = fullfile(logpath,dirConLogs(k).name);
+            manualData = importdata(filename);
+            headers={'XM';'YM';'Major';'Minor';'Angle';'Label'}; %BEWARE! BEFORE CHANGING THE ORDER OF THESE HEADERS RECOGNIZE THE CONSEQUENCES.
+            index=zeros(size(headers)); %The column numbers for the wanted information will be stored here
+            for i=1:length(headers)
+                index(i) = find(strcmp(headers(i),manualData.textdata(1,:)),1,'first'); %get labels
+            end
+            
+            
+            
+            dirConLogsArray(counter) = []; %Don't look at the same text file more than once
+            break
+        end
+    end
 end
-%initialize outputs
-time = cell(size(position));
-reltime = cell(size(position));
-meanGreyVal =cell(size(position));
+%Our goal is to only open each stack of images once.
+%It is convenient to have a matrix that helps identify which cells are
+%present at each timepoint.
+
+
 %for each stack...
 for i=1:length(position)
     %Find the stack of images of the specified channel
@@ -98,10 +133,10 @@ for i=1:length(position)
     %for each cell in that stack...
     for j=1:length(info)
         for k=1:length(ceTable{i})
-        %distill the data from the movie
-        distillDataFromMovie();
-        %store this data in a MATLAB-cell and a struct, two different ways to store the data
-    
+            %distill the data from the movie
+            distillDataFromMovie();
+            %store this data in a MATLAB-cell and a struct, two different ways to store the data
+            
         end
     end
     t.close;
