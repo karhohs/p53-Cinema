@@ -10,7 +10,10 @@ function [reltime,time,meanGreyVal] = processManualSegTrackViaImageJ(logpath,sta
 %
 %
 % Other Notes:
-%
+% The text files that hold the manual segmentation and tracking information
+% comes from ImageJ measurements. The following measurements MUST be
+% included in addition to any others: "Center of Mass", "Fit Ellipse", and
+% "Stack Position". 
 p = inputParser;
 p.addRequired('logpath', @(x)ischar(x));
 p.addRequired('stackpath', @(x)ischar(x));
@@ -47,8 +50,8 @@ numberOfCells = size(log_num,1);
 %Initialize the struct that holds all the cellular information
 unitOfLife = struct('timePoints', {}, 'time', {}, 'nucleusArea', {}, 'cytoplasmArea', {}, 'meanIntensity', {},'parent', {}, 'nuclearSolidity', {}, 'divisionTime', {}, 'manualCentroid', {}, 'major', {},'minor', {}, 'angle', {},'centroid', {},'velocity', {}, 'uid', {}, 'originImage', {});
 unitOfLife(numberOfCells).time = []; %initialize the struct
-%Import all of the pertinent manual segmentation and tracking information
-%from a folder of text files into the unitOfLife struct.
+%----- Import all of the pertinent manual segmentation and tracking
+%information from a folder of text files into the unitOfLife struct. -----
 pos_ind = strcmpi('position',log_txt);
 pos_all = log_num(:,pos_ind);
 pos_unique = unique(pos_all);
@@ -64,6 +67,8 @@ for j=1:numberOfCells
         counter = counter+1;
         temp = regexpi(dirConLogs(k).name,'(?<=pos)(\d+)\.(\d+)','tokens');
         if isempty(temp)
+            dirConLogsArray(counter) = []; %Don't look at the same empty file more than once
+            counter = counter-1;
             continue
         end
         posnum = str2double(temp{1}(1));
@@ -72,14 +77,24 @@ for j=1:numberOfCells
         if (posnum == pos) && (uolnum == uol)
             filename = fullfile(logpath,dirConLogs(k).name);
             manualData = importdata(filename);
-            headers={'XM';'YM';'Major';'Minor';'Angle';'Label'}; %BEWARE! BEFORE CHANGING THE ORDER OF THESE HEADERS RECOGNIZE THE CONSEQUENCES.
+            headers={'XM';'YM';'Major';'Minor';'Angle';'Slice'}; %BEWARE! BEFORE CHANGING THE ORDER OF THESE HEADERS RECOGNIZE THE CONSEQUENCES.
             index=zeros(size(headers)); %The column numbers for the wanted information will be stored here
             for i=1:length(headers)
                 index(i) = find(strcmp(headers(i),manualData.textdata(1,:)),1,'first'); %get labels
             end
-            
-            
-            
+            %As an idiosyncrasy of using importdata() with the ImageJ
+            %text files the data must be parsed in a specific manner.
+            %Therefore, there is code written to do this parsing that may
+            %also be a hotspot for bugs. 
+            dataOffset = size(manualData.textdata,2)-size(manualData.data,2);
+            index = index - dataOffset; %The numeric data will not contain columns with text data and all of the text data is found in the first column(s). All columns have text headers, so the index of the text column(s) needs to be removed.
+            %Fill the unitOfLife struct with the relevant data from the
+            %text file
+            unitOfLife(j).manualCentroid = [manualData.data(:,index(2)),manualData.data(:,index(1))];
+            unitOfLife(j).major = manualData.data(:,index(3));
+            unitOfLife(j).minor = manualData.data(:,index(4));
+            unitOfLife(j).angle = manualData.data(:,index(5));
+            unitOfLife(j).timePoints = manualData.data(:,index(6));
             dirConLogsArray(counter) = []; %Don't look at the same text file more than once
             break
         end
@@ -88,22 +103,18 @@ end
 %Our goal is to only open each stack of images once.
 %It is convenient to have a matrix that helps identify which cells are
 %present at each timepoint.
-
-
-%for each stack...
-for i=1:length(position)
+%The stacks to open are determined by the unique positions
+%for each position...
+for i=1:length(pos_unique)
     %Find the stack of images of the specified channel
     dirCon_stack = dir(stackpath);
-    position_str = num2str(position(i));
     for j=1:length(dirCon_stack)
-        temp = regexp(dirCon_stack(i).name,channel,'once');
-        if ~isempty(temp)
-            temp = regexp(dirCon_stack(i).name,'_s(\d+)','tokens');
-            if temp == position_str
-                stack_filename = dirCon_stack(i).name;
+        expr = '.*_w\d+(.+)_s(\d+).*';
+        temp = regexp(dirCon_stack(j).name,expr,'tokens');
+            if (~isempty(temp)) && (strcmp(temp{1}{1},p.Results.fluorchan)) && (str2double(temp{1}{2}) == pos_unique(i))
+                stack_filename = dirCon_stack(j).name;
                 break
             end
-        end
     end
     %Import stack of images
     filename_stack = fullfile(stackpath,stack_filename);
