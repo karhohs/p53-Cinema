@@ -1,7 +1,7 @@
 function [reltime,time,meanGreyVal] = processManualSegTrackViaImageJ(logpath,stackpath,varargin)
 % [] = processManualSegTrackViaImageJ()
 % Input:
-%
+% timeReference = 'YYYYMMDD 24h:60m:60s'
 %
 % Output:
 %
@@ -13,7 +13,7 @@ function [reltime,time,meanGreyVal] = processManualSegTrackViaImageJ(logpath,sta
 % The text files that hold the manual segmentation and tracking information
 % comes from ImageJ measurements. The following measurements MUST be
 % included in addition to any others: "Center of Mass", "Fit Ellipse", and
-% "Stack Position". 
+% "Stack Position".
 p = inputParser;
 p.addRequired('logpath', @(x)ischar(x));
 p.addRequired('stackpath', @(x)ischar(x));
@@ -85,7 +85,7 @@ for j=1:numberOfCells
             %As an idiosyncrasy of using importdata() with the ImageJ
             %text files the data must be parsed in a specific manner.
             %Therefore, there is code written to do this parsing that may
-            %also be a hotspot for bugs. 
+            %also be a hotspot for bugs.
             dataOffset = size(manualData.textdata,2)-size(manualData.data,2);
             index = index - dataOffset; %The numeric data will not contain columns with text data and all of the text data is found in the first column(s). All columns have text headers, so the index of the text column(s) needs to be removed.
             %Fill the unitOfLife struct with the relevant data from the
@@ -103,21 +103,21 @@ end
 %Our goal is to only open each stack of images once.
 %The stacks to open are determined by the unique positions
 %for each position...
-    dirCon_stack = dir(stackpath);
+dirCon_stack = dir(stackpath);
 for i=1:length(pos_unique)
     %Find the stack of images of the specified channel
     stack_filename = '';
     for j=1:length(dirCon_stack)
         expr = '.*_w\d+(.+)_s(\d+).*';
         temp = regexp(dirCon_stack(j).name,expr,'tokens');
-            if (~isempty(temp)) && (strcmp(temp{1}{1},p.Results.fluorchan)) && (str2double(temp{1}{2}) == pos_unique(i))
-                stack_filename = dirCon_stack(j).name;
-                break
-            end
+        if (~isempty(temp)) && (strcmp(temp{1}{1},p.Results.fluorchan)) && (str2double(temp{1}{2}) == pos_unique(i))
+            stack_filename = dirCon_stack(j).name;
+            break
+        end
     end
     if isempty(stack_filename)
         warning('ManSeg:stackMissing', ...
-        'Could not locate stack for position "%s".', pos_unique(i))
+            'Could not locate stack for position "%s".', pos_unique(i))
         continue
     end
     %Import stack of images (this is probably done inefficiently)
@@ -257,5 +257,76 @@ fprintf(fid,'%s',metadata);
 fclose(fid);
 xdoc = my_parseXML('t3mp.xml');
 delete('t3mp.xml');
-%is the tRef input a string or a number?
+%import times into a cell of strings. The text strings are comma separated
+%values.
+time = textscan(xdoc.MetaData.time.txtd8a{1},'%s','delimiter', ',');
+numtimepts = length(time{1});
+time{2} = 1:numtimepts;
+%make sure tRef is a valid input
+if isempty(tRef)
+    tRef = time{1}{1};
+elseif ischar(tRef)
+    
+elseif isnumeric(tRef)
+    if (rem(tRef,1)~=0) || (tRef<1) || (tRef>numtimepts)
+        warning('ManSeg:tRef', ...
+            'tRef, %s, was an invalid time point and was ignored', tRef)
+        tRef = time{1}{1};
+    else
+        tRef = time{1}{tRef};
+    end
+end
+%convert time measurements in relative time measurements at the tUnits
+%scale. The time is saved in the following format: 'YYYYMMDD 24h:60m:60s'
+%repeat the loop once more for the time reference
+C = regexp(tRef,'(\d{4})(\d{2})(\d{2}) (\d{2}):(\d{2}):(.+)','tokens');
+tRef = zeros(1,6);
+if ~isempty(C)
+    tRef(1) = str2double(C{1}{1});
+    tRef(2) = str2double(C{1}{2});
+    tRef(3) = str2double(C{1}{3});
+    tRef(4) = str2double(C{1}{4});
+    tRef(5) = str2double(C{1}{5});
+    tRef(6) = str2double(C{1}{6});
+else
+    error('manSeg:timeFormat','The expected time format was not found.');
+end
+%calculate the difference in time
+tRef = datenum(tRef);
+DateVector = zeros(1,6);
+for i=1:numtimepts
+    C = regexp(time{1}{i},'(\d{4})(\d{2})(\d{2}) (\d{2}):(\d{2}):(.+)','tokens');
+    if ~isempty(C)
+        DateVector(1) = str2double(C{1}{1});
+        DateVector(2) = str2double(C{1}{2});
+        DateVector(3) = str2double(C{1}{3});
+        DateVector(4) = str2double(C{1}{4});
+        DateVector(5) = str2double(C{1}{5});
+        DateVector(6) = str2double(C{1}{6});
+        tDiff = datenum(DateVector) - tRef; %This number is in units of days. The key number is 86400 seconds in a day
+        switch lower(tUnits)
+            case {'second','seconds'}
+                time{3}{i} = tDiff*86400;
+            case {'minute','minutes'}
+                time{3}{i} = tDiff*1440;
+            case {'hour','hours'}
+                time{3}{i} = tDiff*24;
+            case {'day','days'}
+                time{3}{i} = tDiff;
+            case {'week','weeks'}
+                time{3}{i} = tDiff/7;
+            case {'month','months'}
+                time{3}{i} = tDiff/30.4167;
+            case {'year','years'}
+                time{3}{i} = tDiff/365;
+            otherwise
+                warning('ManSeg:tUnits', ...
+                    'tUnits, %s, was not recognized and converted into "hours"', tUnits)
+                time{3}{i} = tDiff*24;
+        end
+    else
+        error('manSeg:timeFormat','The expected time format was not found.');
+    end
+end
+
 end
