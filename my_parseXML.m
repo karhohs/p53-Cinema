@@ -33,6 +33,7 @@ end
 root_node = xdoc.getDocumentElement; %Locates the node at the root of the XML tag tree
 my_temp_name = regexprep(root_node.getNodeName.toString.toCharArray','[-:.]','_'); %Struct names cannot contain [-:.]
 my_tree = ['S.' my_temp_name]; %The location in S where data is currently being created
+eval([my_tree '= struct;'])
 if root_node.hasAttributes
     my_attributes = root_node.getAttributes;
     my_length = my_attributes.getLength;
