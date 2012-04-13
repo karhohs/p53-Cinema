@@ -18,7 +18,7 @@ p = inputParser;
 p.addRequired('logpath', @(x)ischar(x));
 p.addRequired('stackpath', @(x)ischar(x));
 p.addParamValue('fluorchan','YFP',@(x)ischar(x));
-p.addParamValue('timeReference','',@(x)ischar(x));
+p.addParamValue('timeReference','',@(x)ischar(x)||isnumeric(x));
 p.addParamValue('timeUnits','hours',@(x)ischar(x));
 p.parse(logpath, stackpath, varargin{:});
 %----- Load divisions file -----
@@ -101,13 +101,12 @@ for j=1:numberOfCells
     end
 end
 %Our goal is to only open each stack of images once.
-%It is convenient to have a matrix that helps identify which cells are
-%present at each timepoint.
 %The stacks to open are determined by the unique positions
 %for each position...
+    dirCon_stack = dir(stackpath);
 for i=1:length(pos_unique)
     %Find the stack of images of the specified channel
-    dirCon_stack = dir(stackpath);
+    stack_filename = '';
     for j=1:length(dirCon_stack)
         expr = '.*_w\d+(.+)_s(\d+).*';
         temp = regexp(dirCon_stack(j).name,expr,'tokens');
@@ -116,31 +115,25 @@ for i=1:length(pos_unique)
                 break
             end
     end
-    %Import stack of images
+    if isempty(stack_filename)
+        warning('ManSeg:stackMissing', ...
+        'Could not locate stack for position "%s".', pos_unique(i))
+        continue
+    end
+    %Import stack of images (this is probably done inefficiently)
     filename_stack = fullfile(stackpath,stack_filename);
-    t = Tiff(filename_stack,'r');
     info = imfinfo(filename_stack,'tif');
+    sizeOfImage = [info(1).Height, info(1).Width, length(info)];
+    IM = zeros(sizeOfImage);
+    IM = loadStack(filename_stack,IM,sizeOfImage);
     %Import the time information
-    timeTable = importTimeTableFromStack(t);
+    time = importTimeFromStack(filename_stack,p.Results.timeReference,p.Results.timeUnits);
     %Create a time vector (units = hours) relative to the timeref
     relTimeTable = createRelTimeTable(timeTable);
-    %Create a data structure that will hold the tracking info for all the cells in the current position.
-    trackingTable = cell(length(ceTable{i}),length(info));
-    %Import the tracking data for each cell in this stage position
-    for j=1:length(ceTable{i})
-        %find the text file holding the segmentation and tracking info
-        for k=1:length(dirConLogs)
-            temp = regexp(dirConLogs(k).name,'(?<=Pos)(\d+)\.(\d+)','tokens');
-            pnum = str2num(temp{1});
-            cenum = str2num(temp{2});
-            if pnum == position(i) && cenum == ceTable{i}(j)
-                filename_log = fullfile(logpath,dirConLogs(k).name);
-                break
-            end
-        end
-        %import this data
-        trackingTable(j,:) = importTrackingData(filename_log);
-    end
+    %It is convenient to have a matrix that helps identify which cells are
+    %present at each timepoint.
+    numberOfCellsArray = 1:numberOfCells;
+    numberOfCellsArray = numberOfCellsArray(pos_all==pos_unique(i));
     %for each cell in that stack...
     for j=1:length(info)
         for k=1:length(ceTable{i})
@@ -152,7 +145,6 @@ for i=1:length(pos_unique)
     end
     t.close;
 end
-%Create a struct as an alternative representatin of the data
 end
 
 function [data]=distillDataFromMovie(segment,method,channels,path)
@@ -241,4 +233,29 @@ switch lower(method)
     otherwise
         error('unknown segmentation method input into getMovieMeasurements.m')
 end
+end
+
+function [IM] = loadStack(path,IM,s)
+t = Tiff(path,'r');
+if s(3) > 1
+    for k=1:s(3)-1
+        IM(:,:,k) = double(t.read);
+        t.nextDirectory;
+    end
+end
+%one last time without t.nextDirectory
+IM (:,:,s(3)) = double(t.read);
+t.close;
+end
+
+function [time] = importTimeFromStack(filename,tRef,tUnits)
+t = Tiff(filename,'r');
+%import the time metadata
+metadata = t.getTag('ImageDescription');
+fid = fopen('t3mp.xml','w');
+fprintf(fid,'%s',metadata);
+fclose(fid);
+xdoc = my_parseXML('t3mp.xml');
+delete('t3mp.xml');
+%is the tRef input a string or a number?
 end
