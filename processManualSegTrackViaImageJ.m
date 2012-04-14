@@ -48,7 +48,7 @@ end
 %How many cell tracks are there?
 numberOfCells = size(log_num,1);
 %Initialize the struct that holds all the cellular information
-unitOfLife = struct('timePoints', {}, 'time', {}, 'nucleusArea', {}, 'cytoplasmArea', {}, 'meanIntensity', {},'parent', {}, 'nuclearSolidity', {}, 'divisionTime', {}, 'manualCentroid', {}, 'major', {},'minor', {}, 'angle', {},'centroid', {},'velocity', {}, 'uid', {}, 'originImage', {});
+unitOfLife = struct('timePoints', {}, 'time', {}, 'timeUnits', {}, 'nucleusArea', {}, 'cytoplasmArea', {}, 'meanIntensity', {},'parent', {}, 'nuclearSolidity', {}, 'divisionTime', {}, 'manualCentroid', {}, 'major', {},'minor', {}, 'angle', {},'centroid', {},'velocity', {}, 'uid', {}, 'originImage', {});
 unitOfLife(numberOfCells).time = []; %initialize the struct
 %----- Import all of the pertinent manual segmentation and tracking
 %information from a folder of text files into the unitOfLife struct. -----
@@ -127,23 +127,31 @@ for i=1:length(pos_unique)
     IM = zeros(sizeOfImage);
     IM = loadStack(filename_stack,IM,sizeOfImage);
     %Import the time information
-    time = importTimeFromStack(filename_stack,p.Results.timeReference,p.Results.timeUnits);
-    %Create a time vector (units = hours) relative to the timeref
-    relTimeTable = createRelTimeTable(timeTable);
+    [time,tUnit] = importTimeFromStack(filename_stack,p.Results.timeReference,p.Results.timeUnits);
     %It is convenient to have a matrix that helps identify which cells are
     %present at each timepoint.
     numberOfCellsArray = 1:numberOfCells;
     numberOfCellsArray = numberOfCellsArray(pos_all==pos_unique(i));
+    map = zeros(length(numberOfCellsArray),length(time{3}));
+    %create the matrix and a unique ID for each cell and add the time and
+    %units
+    for k=1:length(numberOfCellsArray)
+        j = numberOfCellsArray(k);
+        unitOfLife(j).time = time{3}(unitOfLife(j).timePoints);
+        unitOfLife(j).timeUnits = tUnit;
+        map(k,unitOfLife(j).timePoints) = j;
+        unitOfLife(j).uid = ['pos ' num2str(pos_all(j)) ' cell ' num2str(uol_all(j)) ' timestamp ' time{1}{unitOfLife(j).timePoints(1)}];
+        unitOfLife(j).originImage = [filename_stack ':' num2str(unitOfLife(j).timePoints(1))];
+    end
     %for each cell in that stack...
-    for j=1:length(info)
-        for k=1:length(ceTable{i})
+    for j=1
+        for k=1
             %distill the data from the movie
             distillDataFromMovie();
-            %store this data in a MATLAB-cell and a struct, two different ways to store the data
+            
             
         end
     end
-    t.close;
 end
 end
 
@@ -248,7 +256,7 @@ IM (:,:,s(3)) = double(t.read);
 t.close;
 end
 
-function [time] = importTimeFromStack(filename,tRef,tUnits)
+function [time,tUnits] = importTimeFromStack(filename,tRef,tUnits)
 t = Tiff(filename,'r');
 %import the time metadata
 metadata = t.getTag('ImageDescription');
@@ -306,27 +314,34 @@ for i=1:numtimepts
         tDiff = datenum(DateVector) - tRef; %This number is in units of days. The key number is 86400 seconds in a day
         switch lower(tUnits)
             case {'second','seconds'}
-                time{3}{i} = tDiff*86400;
+                time{3}(i) = tDiff*86400;
+                tUnits = 'seconds';
             case {'minute','minutes'}
-                time{3}{i} = tDiff*1440;
+                time{3}(i) = tDiff*1440;
+                tUnits = 'minutes';
             case {'hour','hours'}
-                time{3}{i} = tDiff*24;
+                time{3}(i) = tDiff*24;
+                tUnits = 'hours';
             case {'day','days'}
-                time{3}{i} = tDiff;
+                time{3}(i) = tDiff;
+                tUnits = 'days';
             case {'week','weeks'}
-                time{3}{i} = tDiff/7;
+                time{3}(i) = tDiff/7;
+                tUnits = 'weeks';
             case {'month','months'}
-                time{3}{i} = tDiff/30.4167;
+                time{3}(i) = tDiff/30.4167;
+                tUnits = 'months';
             case {'year','years'}
-                time{3}{i} = tDiff/365;
+                time{3}(i) = tDiff/365;
+                tUnits = 'years';
             otherwise
                 warning('ManSeg:tUnits', ...
                     'tUnits, %s, was not recognized and converted into "hours"', tUnits)
-                time{3}{i} = tDiff*24;
+                time{3}(i) = tDiff*24;
+                tUnits = 'hours';
         end
     else
         error('manSeg:timeFormat','The expected time format was not found.');
     end
 end
-
 end
