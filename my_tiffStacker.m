@@ -153,19 +153,25 @@ try
     node_root = xdoc.getDocumentElement;
     my_list = node_root.getElementsByTagName('time');
     aprioritimelabels = my_list.item(0).getTextContent.toCharArray';
-    aprioritimelabels = regexp(aprioritimelabels,'((?<=,)[^,]*|[^,]*(?=,))','match');
-    aprioritimelabels = aprioritimelabels';
+    aprioritimelabels2 = regexp(aprioritimelabels,'((?<=,)[^,]*|[^,]*(?=,))','match'); %This regular expression statement assumes that time labels are a comma separated list of 2 or more items
+    if ~isempty(aprioritimelabels2) %This if statement handles the special case where only a single image is being added to a stack
+        aprioritimelabels = aprioritimelabels2';
+    end
     timelabels = vertcat(aprioritimelabels,timelabels);
     timestr = timelabels{1};
-    for i=2:length(timelabels)
-        timestr = [timestr ',' timelabels{i}]; %#ok<AGROW>
+    if length(timelabels)>1
+        for i=2:length(timelabels)
+            timestr = [timestr ',' timelabels{i}]; %#ok<AGROW>
+        end
     end
     my_list.item(0).setTextContent(timestr);
     xmlwrite('t3mp.xml',xdoc);
 catch err %#ok<NASGU>
     timestr = timelabels{1};
-    for i=2:length(timelabels)
-        timestr = [timestr ',' timelabels{i}]; %#ok<AGROW>
+    if length(timelabels)>1
+        for i=2:length(timelabels)
+            timestr = [timestr ',' timelabels{i}]; %#ok<AGROW>
+        end
     end
     %----- Create New XML file -----
     fid = fopen('t3mp.xml','w');
