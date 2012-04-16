@@ -1,4 +1,4 @@
-function [reltime,time,meanGreyVal] = processManualSegTrackViaImageJ(logpath,stackpath,varargin)
+function [] = processManualSegTrackViaImageJ(logpath,stackpath,varargin)
 % [] = processManualSegTrackViaImageJ()
 % Input:
 % timeReference = 'YYYYMMDD 24h:60m:60s'
@@ -20,6 +20,7 @@ p.addRequired('stackpath', @(x)ischar(x));
 p.addParamValue('fluorchan','YFP',@(x)ischar(x));
 p.addParamValue('timeReference','',@(x)ischar(x)||isnumeric(x));
 p.addParamValue('timeUnits','hours',@(x)ischar(x));
+p.addParamValue('method','ellipse',@(x)ischar(x));
 p.parse(logpath, stackpath, varargin{:});
 %----- Load divisions file -----
 %first, find the divisions file.
@@ -161,103 +162,69 @@ for i=1:length(pos_unique)
         unitOfLife(j).uid = ['pos ' num2str(pos_all(j)) ' cell ' num2str(uol_all(j)) ' timestamp ' time{1}{unitOfLife(j).timePoints(1)}];
         unitOfLife(j).originImage = [filename_stack ':' num2str(unitOfLife(j).timePoints(1))];
     end
+    %initialized struct for quantified fluorescent intensities etc.
+    [unitOfLife(:).velocity]=deal(zeros(1,length(time{3})));
+    [unitOfLife(:).centroid]=deal(zeros(1,length(time{3})));
+    [unitOfLife(:).nuclearSolidity]=deal(zeros(1,length(time{3})));
+    [unitOfLife(:).meanIntensity]=deal(zeros(1,length(time{3})));
+    [unitOfLife(:).cytoplasmArea]=deal(zeros(1,length(time{3})));
+    [unitOfLife(:).nucleusArea]=deal(zeros(1,length(time{3})));
     %for each cell in that stack...
-    for j=1
-        for k=1
-            %distill the data from the movie
-            distillDataFromMovie();
-            
-            
-        end
-    end
+    %distill the data from the movie
+    fprintf('\n'); disp(['crunching data in ',p.Results.fluorchan,' of Pos',num2str(pos_unique(i))])
+    unitOfLife = distillDataFromMovie(map,unitOfLife,p.Results.method,IM);
 end
+save('dynamics','unitOfLife');
 end
 
-function [data]=distillDataFromMovie(segment,method,channels,path)
+function [unitOfLife]=distillDataFromMovie(map,unitOfLife,method,IM)
 %% The methods available for gathering single cell measurements are:
 %1. ellipse: The shape used for segmentation is an ellipse.
-
-switch lower(method)
-    case 'ellipse'
-        %Find the max time
-        Tmax=0;
-        for i=1:length(segment)
-            a=max(segment(i).time);
-            if a>Tmax
-                Tmax=a;
-            end
-        end
-        data=struct;
-        %Initialize the arrays that will contain the points that describe
-        %the ellipse
-        xellipse=zeros(38,1);
-        yellipse=zeros(38,1);
-        rho = (0:9:333)/53;
-        rhocos=cos(rho);
-        rhosin=sin(rho);
-        
-        % Remove 'Brightfield Camera', since no protein measurements are
-        % found in this channel
-        temp=cell(1,length(channels)-1);
-        i=1;
-        for h=1:length(channels)
-            if isempty(regexp(channels{h},'Phase|Bright\w*','once'))
-                temp{i}=channels{h};
-                i=i+1;
-                %else
-                %bf=h;
-            end
-        end
-        channels2=temp;
-        clear temp
-        
-        for h=1:length(channels2)
-            
-            for i=1:length(segment)
-                fprintf('\n'); disp(['crunching data in ',channels2{h},' of Pos',segment(i).pos])
-                %Load the stack for a given position and fluorscent wavelength
-                fname=[path,'\Pos',segment(i).pos(1:2),channels2{h},'.TIF'];
-                S=readStack(fname);
-                temp=NaN(Tmax,1);
-                for j=1:length(segment(i).time)
-                    %All numbers that describe the ellipse must be rounded in
-                    %order to be discretized, i.e. refer to a pixel coordinate
-                    if segment(i).ang(j) == 0 || segment(i).ang(j) == 180
-                        a = round(segment(i).maj(j)/2);
-                        b = round(segment(i).mnr(j)/2);
-                    elseif segment(i).ang(j) == 90 || segment(i).ang(j) == 270
-                        a = round(segment(i).mnr(j)/2);
-                        b = round(segment(i).maj(j)/2);
-                    end
-                    %Centroid is determined
-                    xm = round(segment(i).xm(j));
-                    ym = round(segment(i).ym(j));
-                    
-                    %the points on the perimeter of the ellipse with the determined
-                    %centroid and major/minor axes are calculated
-                    for k=1:38
-                        x=xm+a*rhocos(k);
-                        y=ym+b*rhosin(k);
-                        xellipse(k) = round(x);
-                        yellipse(k) = round(y);
-                    end
-                    %The pixels within the elipse are determined with the function
-                    %roipoly and their mean intensities are stored in the output array
-                    BW = roipoly(S{segment(i).time(j)},xellipse,yellipse); %BW is a binary mask
-                    temp(segment(i).time(j)) = mean(mean(S{segment(i).time(j)}(BW)));
-                    fprintf(1,'.');
+for i = 1:size(IM,3)
+    switch lower(method)
+        case 'ellipse'
+            %Initialize the arrays that will contain the points that describe
+            %the ellipse
+            xellipse=zeros(38,1);
+            yellipse=zeros(38,1);
+            rho = (0:9:333)/53;
+            rhocos=cos(rho);
+            rhosin=sin(rho);
+            mapIndex = map((map(:,i)>0),i)';
+            for j=mapIndex
+                k = i - unitOfLife(j).timePoints(1) + 1;
+                %All numbers that describe the ellipse must be rounded in
+                %order to be discretized, i.e. refer to a pixel coordinate
+                if unitOfLife(j).angle(k) == 0 || unitOfLife(j).angle(k) == 180
+                    a = round(unitOfLife(j).major(k)/2);
+                    b = round(unitOfLife(j).minor(k)/2);
+                elseif unitOfLife(j).angle(k) == 90 || unitOfLife(j).angle(k) == 270
+                    a = round(unitOfLife(j).minor(k)/2);
+                    b = round(unitOfLife(j).major(k)/2);
                 end
-                %Remove the spaces from channel name
-                %This allows the channel names to be used as field names
-                name=regexprep(channels2{h},' ','');
-                data(i).(name)=temp;
-                data(i).pos=segment(i).pos;
+                %Centroid is determined
+                xm = round(unitOfLife(j).manualCentroid(k,1));
+                ym = round(unitOfLife(j).manualCentroid(k,2));
+                
+                %the points on the perimeter of the ellipse with the determined
+                %centroid and major/minor axes are calculated
+                for k=1:38
+                    x=xm+a*rhocos(k);
+                    y=ym+b*rhosin(k);
+                    xellipse(k) = round(x);
+                    yellipse(k) = round(y);
+                end
+                %The pixels within the elipse are determined with the function
+                %roipoly and their mean intensities are stored in the output array
+                BW = roipoly(IM(:,:,i),xellipse,yellipse); %BW is a binary mask
+                IM_temp = IM(:,:,i);
+                unitOfLife(j).meanIntensity(i) = mean(mean(IM_temp(BW)));
+                fprintf(1,'.');
             end
-        end
-        
-    case 'watershed'
-    otherwise
-        error('unknown segmentation method input into getMovieMeasurements.m')
+        case 'watershed'
+        otherwise
+            error('unknown segmentation method input into getMovieMeasurements.m')
+    end
 end
 end
 
