@@ -77,16 +77,34 @@ for j=1:numberOfCells
         if (posnum == pos) && (uolnum == uol)
             filename = fullfile(logpath,dirConLogs(k).name);
             manualData = importdata(filename);
+            dataOffset = size(manualData.textdata,2)-size(manualData.data,2);
             headers={'XM';'YM';'Major';'Minor';'Angle';'Slice'}; %BEWARE! BEFORE CHANGING THE ORDER OF THESE HEADERS RECOGNIZE THE CONSEQUENCES.
             index=zeros(size(headers)); %The column numbers for the wanted information will be stored here
             for i=1:length(headers)
-                index(i) = find(strcmp(headers(i),manualData.textdata(1,:)),1,'first'); %get labels
+                temp = strcmp(headers(i),manualData.textdata(1,:));
+                if any(temp)
+                    index(i) = find(temp,1,'first'); %get labels
+                elseif strcmp(headers{i},'Slice') %if there are no slices the same information can be extracted from the label should it exist
+                    temp = strcmp('Label',manualData.textdata(1,:));
+                    if any(temp)
+                        index(i) = find(temp,1,'first'); %get labels
+                        index2 = size(manualData.data,2)+1;
+                        for h = 2:size(manualData.textdata,1)
+                            temp = regexp(manualData.textdata{h,index(i)},'(?<=:)\d+','match');
+                            manualData.data(h-1,index2) = str2double(temp);
+                        end
+                        index(i)=index2+dataOffset;
+                    else
+                        error('manSeg:missingData2','The "Label" and "Slice" data are missing from the manual segmentation and tracking text file.');
+                    end
+                else %there is data missing
+                    error('manSeg:missingData1','The "%s" data is missing from the manual segmentation and tracking text file.',headers{i});
+                end
             end
             %As an idiosyncrasy of using importdata() with the ImageJ
             %text files the data must be parsed in a specific manner.
             %Therefore, there is code written to do this parsing that may
             %also be a hotspot for bugs.
-            dataOffset = size(manualData.textdata,2)-size(manualData.data,2);
             index = index - dataOffset; %The numeric data will not contain columns with text data and all of the text data is found in the first column(s). All columns have text headers, so the index of the text column(s) needs to be removed.
             %Fill the unitOfLife struct with the relevant data from the
             %text file
