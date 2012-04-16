@@ -14,9 +14,9 @@ function []=backgroundRemoval(stackpath,varargin)
 p = inputParser;
 p.addRequired('stackpath', @(x)ischar(x));
 p.addParamValue('method','Jared',@(x)ischar(x));
-p.addParamValue('magnification',20,@(x)isnumeric(x));
-p.addParamValue('binning',1,@(x)isnumeric(x));
-p.parse(logpath, stackpath, varargin{:});
+p.addParamValue('magnification',20,@(x)any(bsxfun(@eq,x,[10,20,40,60,100])));
+p.addParamValue('binning',1,@(x)any(bsxfun(@eq,x,[1,2,4,8,16])));
+p.parse(stackpath, varargin{:});
 stacknames=importStackNames(stackpath);
 tempfoldername=regexp(stackpath,'(?<=\\)[\w ]*','match'); %Prepare to create a new folder to place background subtracted stacks
 tempfoldername=[tempfoldername{end},'_bkgd'];
