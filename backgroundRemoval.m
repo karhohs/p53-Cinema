@@ -1,7 +1,7 @@
 function []=backgroundRemoval(stackpath,varargin)
 % [] = backgroundRemoval()
 % Input:
-% 
+%
 %
 % Output:
 %
@@ -10,14 +10,22 @@ function []=backgroundRemoval(stackpath,varargin)
 %
 %
 % Other Notes:
-% 
+%
 p = inputParser;
 p.addRequired('stackpath', @(x)ischar(x));
 p.addParamValue('method','Jared',@(x)ischar(x));
 p.addParamValue('magnification',20,@(x)any(bsxfun(@eq,x,[10,20,40,60,100])));
-p.addParamValue('binning',1,@(x)any(bsxfun(@eq,x,[1,2,4,8,16])));
+p.addParamValue('binning',1,@(x)any(bsxfun(@eq,x,[1,2])));
+p.addParamValue('fluorchan','YFP',@(x)ischar(x));
 p.parse(stackpath, varargin{:});
-stacknames=importStackNames(stackpath);
+p2.met = p.Results.method;
+p2.mag = p.Results.magnification;
+p2.bin = p.Results.binning;
+
+disp(['working in ', stackpath]); %Sanity Check
+dirCon_stack = dir(stackpath);
+stacknames=importStackNames(dirCon_stack,p.Results.fluorchan);
+
 tempfoldername=regexp(stackpath,'(?<=\\)[\w ]*','match'); %Prepare to create a new folder to place background subtracted stacks
 tempfoldername=[tempfoldername{end},'_bkgd'];
 bkgdstackpath=[stackpath,'\..\',tempfoldername];
@@ -25,16 +33,44 @@ if ~exist(bkgdstackpath,'dir')
     mkdir(bkgdstackpath);
     for i=1:length(stacknames)
         disp(['Subtracting background from ',stacknames{i}])
-        S=readStack([stackpath,'\',stacknames{i}]);
-        S=bkgdmethods(S,'jared');
-        newStack(S,stacknames{i},bkgdstackpath);
+        info = imfinfo([stackpath,'\',stacknames{i}],'tif');
+        t = Tiff([stackpath,'\',stacknames{i}],'r');
+        Name = regexprep(stacknames{i},'(?<=_t)(\w*)(?=\.)','$1_bkgd');
+        Name = fullfile(bkgdstackpath,Name);
+        if length(info) > 1
+            for k=1:length(info)-1
+                IM = double(t.read);
+                IM=bkgdmethods(IM,p2);
+                IM = uint16(IM);
+                imwrite(IM,Name,'tif','WriteMode','append','Compression','none');
+                t.nextDirectory;
+            end
+            %one last time without t.nextDirectory
+            IM = double(t.read);
+            IM = bkgdmethods(IM,p2);
+            IM = uint16(IM);
+            imwrite(IM,Name,'tif','WriteMode','append','Compression','none');
+        else
+            IM = double(t.read);
+            IM = bkgdmethods(IM,p2);
+            IM = uint16(IM);
+            imwrite(IM,Name,'tif','WriteMode','append','Compression','none');
+        end
+        %add image description from old stack to new stack
+        t.setDirectory(1)
+        metadata = t.getTag('ImageDescription');
+        t.close;
+        t = Tiff(Name,'r+');
+        t.setTag('ImageDescription',metadata);
+        t.rewriteDirectory;
+        t.close;
     end
 else
     disp('Note: Background subtraction has occurred previously.')
 end
 end
 
-function [S]=bkgdmethods(S,method)
+function [S]=bkgdmethods(S,p)
 %S is a stack, method chooses between several different background
 %subtraction methods
 %Jared's method is a morphological approach to find the background. An
@@ -55,69 +91,92 @@ function [S]=bkgdmethods(S,method)
 %grid space the 10th percentile pixel value is chosen to as the background.
 %The size of the grid must be roughly 1 to 2 times the size of a nucleus if
 %measuring a nuclear localized protein (in this case 96 pixels is chosen).
-switch lower(method)
+switch lower(p.met)
     %Depending on the se2Size this method is similar to the 'uri' method.
     %It is the most conservative of all the methods. It is roughly 50 times
     %slower than the 'uri' method.
     case 'jared'
-        resizeMultiplier = 1/2; % Downsampling scale factor makes image processing go faster and smooths image
-        %se1Size = 20;           % Upper limit of intracellular features in pixels for a 672x512pixel image from a 40x objective inside MCF7 cells
-        %se2Size = 200;          % Upper limit of cells/cell clumps in pixels '' '' ''
-        %se1Size = 4;           % Upper limit of intracellular features in pixels for a 672x512pixel image from a 20x objective inside MCF7 cells
-        %se2Size = 30;          % Upper limit of cells/cell clumps in pixels '' '' ''      
-        se1Size = 4;           % Upper limit of intracellular features in pixels for a 1344x1024pixel image from a 60x objective inside FISH cells
-        se2Size = 40;          % Upper limit of cells/cell clumps in pixels '' '' ''            
-        se1 = strel('disk', se1Size*resizeMultiplier);  %Structing elements are necessary for using MATLABS image processing functions
-        se2 = strel('disk',se2Size*resizeMultiplier);
-        if iscell(S)
-            origSize  = size(S{1});
-            for k=1:length(S)
-                % Rescale image and compute background using closing/opening.
-                
-                I    = imresize(S{k}, resizeMultiplier);
-                pad   = round(se2Size*resizeMultiplier);
-                % Pad image with a reflection so that borders don't introduce artifacts
-                I    = padarray(I, [pad,pad], 'symmetric', 'both');
-                % Perform opening/closing to get background
-                I     = imclose(I, se1);   % ignore small low-intensity features (inside cells)
-                I     = imopen(I, se2);     % ignore large high-intensity features (that are cells)
-                % Remove padding and resize
-                I     = floor(imresize(I(pad+1:end-pad, pad+1:end-pad), origSize));
-                % Subtract background!
-                S{k} = S{k} - I;
-                S{k}(S{k}<0)=0;
-                %NOTE: b/c I is an unsigned integer array, negative numbers
-                %created by subtraction all become zero.
-                
-            end
-        else
-            origSize  = size(S);
-            % Rescale image and compute background using closing/opening.
-            I    = imresize(S, resizeMultiplier);
-            pad   = round(se2Size*resizeMultiplier);
-            I    = padarray(I, [pad,pad], 'symmetric', 'both');
-            I     = imclose(I, se1);   % ignore small low-intensity features (inside cells)
-            I     = imopen(I, se2);     % ignore large high-intensity features (that are cells)
-            I     = floor(imresize(I(pad+1:end-pad, pad+1:end-pad), origSize));
-            S = S - I;
-            S(S<0)=0;
+        switch p.mag
+            %The values below have been heuristically chosen.
+            case 10
+                se1Size = 10;
+                se2Size = 50;
+            case 20
+                se1Size = 20;
+                se2Size = 100;
+            case 40
+                se1Size = 40;           % intracellular features in pixels, such as the nucleolus
+                se2Size = 200;          % cells/cell clumps in pixels '' '' '
+            case 60
+                se1Size = 60;
+                se2Size = 300;
+            case 100
+                se1Size = 100;
+                se2Size = 500;
+            otherwise
+                error('bkgd:Whatever','How did you get here?');
         end
+        switch p.bin
+            case 1
+                
+            case 2
+                se1Size = se1Size/2;
+                se2Size = se2Size/2;
+            otherwise
+                error('bkgd:Whatever','How did you get here?');
+        end
+        resizeMultiplier = 1/2; % Downsampling scale factor makes image processing go faster and smooths image
+        se1 = strel('disk', round(se1Size*resizeMultiplier));  %Structing elements are necessary for using MATLABS image processing functions
+        se2 = strel('disk',round(se2Size*resizeMultiplier));
+        
+        origSize  = size(S);
+        % Rescale image and compute background using closing/opening.
+        I    = imresize(S, resizeMultiplier);
+        % Pad image with a reflection so that borders don't introduce artifacts
+        pad   = round(se2Size*resizeMultiplier);
+        I    = padarray(I, [pad,pad], 'symmetric', 'both');
+        % Perform opening/closing to get background
+        I     = imclose(I, se1);   % ignore small low-intensity features (inside cells)
+        I     = imopen(I, se2);     % ignore large high-intensity features (that are cells)
+        % Remove padding and resize
+        I     = floor(imresize(I(pad+1:end-pad, pad+1:end-pad), origSize));
+        % Subtract background!
+        S = S - I;
+        S(S<0)=0;
     case 'alex'
         %This algorithm is more aggressive than the 'uri' algorithm. It
         %also takes approximately 100 times longer to run then the 'uri'
-        %algorithm
-        sel=100; %structuring element length. The 512x672 image will be broken into 32x32 squares
-        if iscell(S)
-            for i=1:length(S)
-                bkgd=gridscan(S{i},@gaussianthreshold,sel);
-                S{i}=S{i}-bkgd;
-                S{i}(S{i}<0)=0;
-            end
-        else
-            bkgd=gridscan(S,@gaussianthreshold,sel);
+        %algorithm. I do not think this works well at large grid
+        %sizes/high-magnification
+        
+        switch p.mag
+            %The values below have been heuristically chosen.
+            case 10
+                sel=50;
+            case 20
+                sel=100;
+            case 40
+                sel=200;
+            case 60
+                sel=300;
+            case 100
+                sel=500;
+            otherwise
+                error('bkgd:Whatever','How did you get here?');
+        end
+        switch p.bin
+            case 1
+                
+            case 2
+                sel = sel/2;
+            otherwise
+                error('bkgd:Whatever','How did you get here?');
+        end
+        
+            bkgd=gridscan(S,@gaussianthreshold,round(sel));
             S=S-bkgd;
             S(S<0)=0;
-        end
+        
     case 'uri'
         %This algorithm seems to work well when the sel value is about the
         %size of a large nucleus. Larger senescent nuclei might prove
@@ -126,18 +185,35 @@ switch lower(method)
         %the more conservative the estimate of the background. Between the
         %'jared', 'alex', and 'uri' methods the 'uri' method is the fastest
         %by at least 2 orders of magnitude.
-        sel=300; %structuring element length. %100 for 20x, 200 for 40x, 300 for 60x
-        if iscell(S)
-            for i=1:length(S)
-                bkgd=gridscan(S{i},@rankfilter,sel);
-                S{i}=S{i}-bkgd;
-                S{i}(S{i}<0)=0;
-            end
-        else
+        
+        %I do not think this works well at large-grid-sizes/high-magnification
+        switch p.mag
+            %The values below have been heuristically chosen.
+            case 10
+                sel=50;
+            case 20
+                sel=100;
+            case 40
+                sel=200;
+            case 60
+                sel=300;
+            case 100
+                sel=500;
+            otherwise
+                error('bkgd:Whatever','How did you get here?');
+        end
+        switch p.bin
+            case 1
+                
+            case 2
+                sel = sel/2;
+            otherwise
+                error('bkgd:Whatever','How did you get here?');
+        end        
             bkgd=gridscan(S,@rankfilter,sel);
             S=S-bkgd;
-            S(S<0)=0;
-        end
+            S(S<0)=0;        
+    case 'tonia'
     otherwise
         error('Unknown method of background subtraction specified')
 end
@@ -216,3 +292,25 @@ else
     
 end
 end
+
+function [Temp] = importStackNames(dirCon_stack,fc)
+expr=['.*(?<!thumb.*)_w\d+' fc '.*'];
+Temp=cell([1,length(dirCon_stack)]); %Initialize cell array
+% ----- Identify the legitimate stacks -----
+i=1;
+for j=1:length(dirCon_stack)
+    Temp2=regexp(dirCon_stack(j).name,expr,'match','once','ignorecase');
+    if Temp2
+        Temp{i}=Temp2;
+        i=i+1;
+    end
+end
+% ----- Remove empty cells -----
+Temp(i:end)=[];
+% for j=length(Temp):-1:1
+%     if isempty(Temp{j})
+%         Temp(j)=[];
+%     end
+% end
+end
+
