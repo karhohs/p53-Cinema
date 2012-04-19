@@ -1,4 +1,4 @@
-function []=flatfieldcorrection(stackpath,ffpath)
+function []=flatfieldcorrection(stackpath,ffpath,varargin)
 % [] = flatfieldcorrection(stackpath,ffpath)
 % Input:
 % stackpath: the location of TIFF that will be flat field corrected
@@ -10,42 +10,76 @@ function []=flatfieldcorrection(stackpath,ffpath)
 % [stackpath '_ff'].
 %
 % Description:
-% 
+%
 %
 % Other Notes:
 % It is assumed that the bit depth of the source images are 12-bit.
-if nargin==0
-    stackpath = 'C:\Users\Kyle\Documents\p53CinemaSTACKS';
-    ffpath='G:\KWKDocuments\My Dropbox\p53Cinema\flatfield_20110909';
-end
-%----- Import stacknames -----
-disp(['working in ', stackpath]); %Sanity Check
-dirCon_stack = dir(stackpath);
-stacknames=importStackNames(dirCon_stack);
-stacknames2=stacknames;
-%This is part of a bug. This file expects the input filename to be of a
-%certain format. The following for-loop partially ensures the file names
-%are in that format. 
-for i=1:length(stacknames)
-Name_temp = regexprep(stacknames(i),'\s',''); %Remove all not(alphabetic, numeric, or underscore) characters
-Name_temp = regexprep(Name_temp,'tocamera','','ignorecase'); %remove 'tocamera' if present b/c it is not informative
-Name_temp = regexprep(Name_temp,'camera','','ignorecase'); %remove 'camera' if present b/c it is not informative
-stacknames2(i) = Name_temp;
-end
-%identify the channels
-expr='(?<=_w\d+).*(?=_s\d+)';
-Temp=cell([1,length(stacknames)]); %Initialize cell array
-i=1;
-for j=1:length(stacknames2)
-    Temp2=regexp(stacknames2{j},expr,'match','once','ignorecase');
-    if Temp2
-        Temp{i}=Temp2;
-        i=i+1;
+p = inputParser;
+p.addRequired('stackpath', @(x)ischar(x));
+p.addRequired('ffpath', @(x)ischar(x));
+p.addParamValue('scanslide', '', @(x)iscellstr(x));
+p.parse(stackpath,ffpath, varargin{:});
+
+if isempty(p.Results.scanslide)
+    %----- Import stacknames -----
+    disp(['working in ', stackpath]); %Sanity Check
+    dirCon_stack = dir(stackpath);
+    stacknames=importStackNames(dirCon_stack);
+    stacknames2=stacknames;
+    %This is part of a bug. This file expects the input filename to be of a
+    %certain format. The following for-loop partially ensures the file names
+    %are in that format.
+    for i=1:length(stacknames)
+        Name_temp = regexprep(stacknames(i),'\s',''); %Remove all not(alphabetic, numeric, or underscore) characters
+        Name_temp = regexprep(Name_temp,'tocamera','','ignorecase'); %remove 'tocamera' if present b/c it is not informative
+        Name_temp = regexprep(Name_temp,'camera','','ignorecase'); %remove 'camera' if present b/c it is not informative
+        stacknames2(i) = Name_temp;
+    end
+    %identify the channels
+    expr='(?<=_w\d+).*(?=_s\d+)';
+    Temp=cell([1,length(stacknames)]); %Initialize cell array
+    i=1;
+    for j=1:length(stacknames2)
+        Temp2=regexp(stacknames2{j},expr,'match','once','ignorecase');
+        if Temp2
+            Temp{i}=Temp2;
+            i=i+1;
+        end
+    end
+    Temp(i:end)=[];
+    channels_stacks = unique(Temp); %The different channels are saved
+else
+    %----- Metamorph saves images from scanslide differently from multidimensional acquisition. This is annoying.
+    %The 'scanslide' cell array should contain fluorescent channel names in
+    %the same numerical order in which they were taken.
+    channels_stacks = p.Results.scanslide; %The different channels are saved
+    %----- Import stacknames -----
+    disp(['working in ', stackpath]); %Sanity Check
+    dirCon_stack = dir(stackpath);
+    stacknames=importStackNames(dirCon_stack);
+    stacknames2=stacknames;
+    %Add the channel name to the stackname
+    expr='(?<=_w)\d+(?=_s\d+)';
+    for j=1:length(stacknames2)
+        Temp=regexp(stacknames2{j},expr,'match','once','ignorecase');
+        if Temp
+            tempstr1 = regexp(stacknames2{j},'.*(?=_s\d+)','match','once','ignorecase');
+            tempstr2 = regexp(stacknames2{j},'(?<=_w\d+).*','match','once','ignorecase');
+            stacknames2{j} = [tempstr1 channels_stacks{str2double(Temp)} tempstr2];          
+        end
+    end
+    %For every channel in scanslide there is assumed to be a birds-eye-view
+    %image that is saved as the last stage position for every channel.
+    %Prevent these images from being corrected.
+    lastStagePositionNumber = length(stacknames)/length(channels_stacks);
+    for i = length(stacknames):-1:1
+        temp=regexp(stacknames{i},['(?<=_s)' num2str(lastStagePositionNumber)],'match','once');
+        if temp
+            stacknames(i) = [];
+            stacknames2(i) = [];
+        end
     end
 end
-Temp(i:end)=[];
-channels_stacks = unique(Temp); %The different channels are saved
-
 %import directory of flatfield images
 disp(['working in ', ffpath]); %Sanity Check
 dirCon_ff = dir(ffpath);
@@ -153,6 +187,7 @@ for j=1:length(channels_stacks)
         if ~isempty(temp)
             disp(['Flatfield correcting ',stacknames{i}])
             info = imfinfo([stackpath,'\',stacknames{i}],'tif');
+            warning('off','MATLAB:tifflib:libraryWarning');
             t = Tiff([stackpath,'\',stacknames{i}],'r');
             Name = regexprep(stacknames2{i},'(?<=_t)(\w*)(?=\.)','$1_ff');
             if length(info) > 1
@@ -194,6 +229,7 @@ for j=1:length(channels_stacks)
         end
     end
 end
+signalCompletionWithSound();
 end
 
 %----- SUBFUNCTION IMPORTSTACKNAMES -----
@@ -366,4 +402,9 @@ switch numType
     case 'uint16'
         IM = bitshift(IM,4);
 end
+end
+
+function [] = signalCompletionWithSound()
+[y, Fs] = wavread('completion.wav');
+sound(y,Fs);
 end
