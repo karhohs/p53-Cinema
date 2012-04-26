@@ -1,45 +1,78 @@
-function [] = immunofluorescenceCP(IFpath,varargin)
+function [] = immunofluorescenceCP(CPoutput,varargin)
 % [] = processManualSegTrackViaImageJ()
 % Input:
-% timeReference = 'YYYYMMDD 24h:60m:60s'
+% CPoutput = the path to a Cell Profiler *.mat file.
 %
 % Output:
 %
 %
 % Description:
-%
+% I have been liking Cell Profiler for quantifying immunofluorescence data
+% recently. This file will analyze the output from Cell Profiler.
 %
 % Other Notes:
-% This program will segment nuclei and cytoplasm if markers for these
-% exist. It is assumed that at least a nuclear marker exists.
+% 
 p = inputParser;
-p.addRequired('IFpath', @(x)ischar(x));
-p.addParamValue('nuclearMarker','DAPI',@(x)ischar(x));
-p.addParamValue('timeReference','',@(x)ischar(x)||isnumeric(x));
-p.addParamValue('timeUnits','hours',@(x)ischar(x));
-p.addParamValue('method','ellipse',@(x)ischar(x));
-p.parse(logpath, stackpath, varargin{:});
+p.addRequired('CPoutput', @(x)ischar(x));
+p.addParamValue('infoName','Nuclei',@(x)ischar(x));
+p.parse(CPoutput, varargin{:});
 
-%Store all of the biological information in a struct
-unitOfLife = struct('timePoints', {}, 'time', {}, 'timeUnits', {}, 'nucleusArea', {}, 'cytoplasmArea', {}, 'meanIntensity', {},'meanIntensityHeader', {},'parent', {}, 'nuclearSolidity', {}, 'divisionTime', {}, 'manualCentroid', {}, 'major', {},'minor', {}, 'angle', {},'centroid', {},'velocity', {}, 'uid', {}, 'originImage', {});
-unitOfLife(1e8).time = []; %initialize the struct
-cellcounter = 1; %keeps track of the number of cells counted
+Nuclei = p.Results.infoName;
+CP = open(CPoutput);
 
+%Plot some histograms
+nucleiArea = eval(['CP.handles.Measurements.' Nuclei '.AreaShape_Area']);
+nucleiMeanIntensityYFP = eval(['CP.handles.Measurements.' Nuclei '.Intensity_MeanIntensity_YFP']);
+nucleiMeanIntensityCy5 = eval(['CP.handles.Measurements.' Nuclei '.Intensity_MeanIntensity_Cy5']);
+nucleiMeanIntensityDAPI = eval(['CP.handles.Measurements.' Nuclei '.Intensity_MeanIntensity_DAPI']);
+nucleiSolidity = eval(['CP.handles.Measurements.' Nuclei '.AreaShape_Solidity']);
+nucleiCompactness = eval(['CP.handles.Measurements.' Nuclei '.AreaShape_Compactness']);
+nucleiX = eval(['CP.handles.Measurements.' Nuclei '.AreaShape_Center_Y']);
+nucleiY = eval(['CP.handles.Measurements.' Nuclei '.AreaShape_Center_X']);
+DAPIfilenames = CP.handles.Measurements.Image.FileName_DAPI;
 
-%Load the directory contents with the image files. Look for the DAPI
-%channel.
-dirCon_stack = dir(stackpath);
-    %Find the stack of images of the specified channel
-    stack_filename = '';
-    for j=1:length(dirCon_stack)
-        expr = '.*_w\d+(.+)_s(\d+).*';
-        temp = regexp(dirCon_stack(j).name,expr,'tokens');
-%identify the channels
-    expr='(?<=_w\d+).*(?=_s\d+)';
+numberoflifeunits = 0;
+for i = 1:length(nucleiArea)
+    numberoflifeunits = numberoflifeunits + numel(nucleiArea{i});
+end
 
-%find the time of the image
-t = Tiff(name2read,'r');
-timelabels{k} = p53TiffMetaAnalysis4Metamorph(t);
-t.close;
-                
+nucleiArea_array = linearizeContentsOfCell(nucleiArea,numberoflifeunits);
+nucleiMeanIntensityYFP_array = linearizeContentsOfCell(nucleiMeanIntensityYFP,numberoflifeunits);
+nucleiMeanIntensityCy5_array = linearizeContentsOfCell(nucleiMeanIntensityCy5,numberoflifeunits);
+nucleiMeanIntensityDAPI_array = linearizeContentsOfCell(nucleiMeanIntensityDAPI,numberoflifeunits);
+nucleiSolidity_array = linearizeContentsOfCell(nucleiSolidity,numberoflifeunits);
+nucleiCompactness_array = linearizeContentsOfCell(nucleiCompactness,numberoflifeunits);
+
+%----- Create a new folder to hold corrected images -----
+tempfoldername=regexp(CPoutput,'(?<=\\)[\w ]*','match'); %Prepare to create a new folder to place background subtracted stacks
+tempdrive = regexp(CPoutput,'[a-zA-Z]:','match');
+tempfoldername{end} = 'figures';
+imagepath=fullfile(tempdrive{1},tempfoldername{:});
+mkdir(imagepath);
+cd(imagepath)
+
+myplothist(nucleiArea_array,'nucleiArea')
+myplothist(nucleiSolidity_array,'nucleiSolidity')
+myplothist(nucleiCompactness_array,'nucleiCompactness')
+myplothist(nucleiMeanIntensityDAPI_array.*nucleiArea_array,'nucleiDAPI')
+end
+
+function [y] = linearizeContentsOfCell(x,numolu)
+y = zeros(1,numolu);
+counter = 1;
+for i = 1:length(x)
+    temp = numel(x{i});
+    y(counter:temp+counter-1) = x{i};
+    counter = counter+temp;
+end
+end
+
+function [] = myplothist(x,filename)
+h=dialog ( 'visible', 'off', 'windowstyle', 'normal' );
+ax=axes('parent', h);
+hist (ax,x,100)
+title(filename)
+%plot (ax,[1 2 3 4 5], [1 2 3 4 5].^3 )
+saveas (ax, filename, 'jpg' )
+close(h)
 end
