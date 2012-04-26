@@ -1,4 +1,4 @@
-function [] = immunofluorescence(IFpath,varargin)
+function [] = immunofluorescenceCP(IFpath,varargin)
 % [] = processManualSegTrackViaImageJ()
 % Input:
 % timeReference = 'YYYYMMDD 24h:60m:60s'
