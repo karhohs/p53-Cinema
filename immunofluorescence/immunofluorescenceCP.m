@@ -64,6 +64,7 @@ myplothist(nucleiMeanIntensityCy5_array.*nucleiArea_array,'TotalNucleiCy5')
 %Area is used to filter out objects that are too small to be nuclei. Use a
 %log-normal distribution to eliminate small outliers. Senescent cells are
 %known to have large nuclei, so these outliers should not be eliminated.
+afarray = areafilter()
 
 
 %Clumped cells and senescent cells have similar areas. To distinguish
@@ -102,4 +103,37 @@ hist(ax,x,100);
 title(filename);
 saveas (ax, filename, 'jpg' );
 close(h);
+end
+
+function [y] = areafilter(x)
+L = length(x);
+%assume area is distributed as a log-normal distribution
+logx = log(x);
+%assume there are outliers. We want to ignore these outliers while fitting
+%the normal distribution, so we discard the bottom and top 10%.
+logx = logx(round(L*.1):round(L*.9));
+%From this trimmed set we have to bootstrap the tails of the distribution.
+bootset = randn(L,1);
+bootset = sort(bootset)
+%We must estimate the variance of the distribution from the trimmed set.
+%This variance must be scaled by the variance of a zero mean, unit variance
+%normal distribution trimmed the same way. The z-score for a 10% tail is
+%1.2815.
+%The variance for this trimmed distribution can be found numerically using
+%MATLAB. x = randn(1e6,1);x = sort(x);x = x(round(length(x)*.1):round(length(x)*.9));var(x)
+%he variance equals 0.4377
+varlogx = var(logx)/.4377;
+%The bootset is scaled by the mean and variance of the sample data
+bootset = logx*sqrt(varlogx)+mean(logx);
+%The bootstraped tails are added to the trimmed distribution.
+bootmin = bootset(bootset<min(logx));
+bootmax = bootset(bootset>max(logx));
+newdist = [bootmin;logx';bootmax];
+%The new distribution is scaled to zero mean and unit variance
+newdistmean = mean(newdist);
+newdistvar = var(newdist);
+newdist = (newdist-newdistmean)/sqrt(newdistvar);
+%The goodness of fit to a normal distribution is tested by the
+%kolmogorov-smirnoff test.
+goodfitbool = kstest(newdist);
 end
