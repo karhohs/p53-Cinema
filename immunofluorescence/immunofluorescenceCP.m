@@ -57,11 +57,8 @@ cd(imagepath)
 %Area is used to filter out objects that are too small to be nuclei. Use a
 %log-normal distribution to eliminate small outliers. Senescent cells are
 %known to have large nuclei, so these outliers should not be eliminated.
-[afarray,mu,sigma] = areafilter(nucleiArea_array);
-myplothistarea(nucleiArea_array,'nucleiArea',afarray,mu,sigma);
-
-
-
+[afarray,afthresh,mu,sigma] = areafilter(nucleiArea_array);
+myplothistarea(nucleiArea_array,'nucleiArea',afthresh,mu,sigma);
 
 %Clumped cells and senescent cells have similar areas. To distinguish
 %between clumped cells and senescent cells a combined measure is used:
@@ -73,26 +70,30 @@ myplothistarea(nucleiArea_array,'nucleiArea',afarray,mu,sigma);
 %should be less than 1. It is best fit to a distribution when the measures
 %are abs(1-x), where x is the form-factor measurement. Since 0<x<1 it might
 %be worth looking at the -log(x) distribution.
-[fffarray,paramhat] = formfactorfilter(nucleiFormFactor_array);
-myplothistformfactor(nucleiFormFactor_array,'nucleiFormFactor',fffarray,paramhat)
+[fffarray,fffthresh] = formfactorfilter(nucleiFormFactor_array);
+myplothistformfactor(nucleiFormFactor_array,'nucleiFormFactor',fffthresh)
 %Solidity detects the presence of furrows or deviations from a smooth curve
 %by comparing the convex hull area to the object area. Clumped cells can be
 %thought of a overlapping ellipses that would produce object furrows. It is
 %a measure that is 0<x<1 and has a similar distribution to the form-factor.
-sfarray = formfactorfilter(nucleiSolidity_array);
+[sfarray,sfthresh] = solidityfilter(nucleiSolidity_array);
+myplothistformfactor(nucleiSolidity_array,'nucleiSolidity',sfthresh)
 %Compactness gives a second way to measure furrows or spikes. Compactness
 %should be greater than 1. Taking the log of this data will move the
 %smallest value of the disribution to 0 and make it easier to compare
 %outliers, which might have extreme values since this statistic is a ratio.
-cfarray = formfactorfilter(nucleiCompactness_array);
-
-
-myplothist(nucleiSolidity_array,'nucleiSolidity',sfarray)
-myplothist(nucleiCompactness_array,'nucleiCompactness',cfarray)
-myplothist(nucleiMeanIntensityDAPI_array.*nucleiArea_array,'TotalNucleiDAPI')
-myplothist(nucleiMeanIntensityYFP_array.*nucleiArea_array,'TotalNucleiYFP')
-myplothist(nucleiMeanIntensityCy5_array.*nucleiArea_array,'TotalNucleiCy5')
-
+[cfarray,cfthresh] = compactnessfilter(nucleiCompactness_array);
+myplothistformfactor(nucleiCompactness_array,'nucleiCompactness',cfthresh)
+nucleiLogic = afarray & cfarray & fffarray & sfarray;
+myData = nucleiMeanIntensityDAPI_array.*nucleiArea_array;
+myData = myData(nucleiLogic);
+myplothistDAPI(myData,'TotalNucleiDAPI')
+myData = nucleiMeanIntensityYFP_array.*nucleiArea_array;
+myData = myData(nucleiLogic);
+myplothist(myData,'TotalNucleiYFP')
+myData = nucleiMeanIntensityCy5_array.*nucleiArea_array;
+myData = myData(nucleiLogic);
+myplothist(myData,'TotalNucleiCy5')
 end
 
 function [y] = linearizeContentsOfCell(x,numolu)
@@ -105,14 +106,40 @@ for i = 1:length(x)
 end
 end
 
-function [] = myplothist(x,filename,vline)
+function [] = myplothist(in,filename)
 h=figure ( 'visible', 'off', 'position', [10, 10, 672, 512] );
 ax=axes('parent',h);
-hist(ax,x,100);
+[y,x2] = hist(in,100);
+h2 = bar(ax,x2,y/(sum(y)*(x2(2)-x2(1))),'hist');
+set(h2,'FaceColor',[0 0.5 1],'EdgeColor',[0 0 1]);
 title(filename);
 hold on
-yL = get(ax,'YLim');
-line([vline vline],yL,'Color','r');
+y2 = ksdensity(in(in>0),x2,'support','positive');
+plot(ax,x2,y2,'Color','black','LineWidth',1.5)
+hold off
+saveas (ax, filename, 'pdf' );
+close(h);
+end
+
+function [] = myplothistDAPI(in,filename)
+%Trim the DAPI data to represent FACs data
+[y,xi] = ksdensity(in,'support','positive');
+threshRight = xi(triangleThreshCore(y));
+[y,xi] = ksdensity(-in);
+threshLeft = -xi(triangleThreshCore(y));
+inlogic = in>threshLeft & in<threshRight;
+in = in(inlogic);
+%Plot the data
+h=figure ( 'visible', 'off', 'position', [10, 10, 672, 512] );
+ax=axes('parent',h);
+[y,x2] = hist(in,100);
+h2 = bar(ax,x2,y/(sum(y)*(x2(2)-x2(1))),'hist');
+set(h2,'FaceColor',[0 0.5 1],'EdgeColor',[0 0 1]);
+title(filename);
+hold on
+y2 = ksdensity(in(in>0),x2,'support','positive','kernel','triangle');
+plot(ax,x2,y2,'Color','black','LineWidth',1.5)
+hold off
 saveas (ax, filename, 'pdf' );
 close(h);
 end
@@ -134,27 +161,28 @@ saveas (ax, filename, 'pdf' );
 close(h);
 end
 
-function [] = myplothistformfactor(x,filename,vline,paramhat)
+function [] = myplothistformfactor(in,filename,vline)
 h=figure ( 'visible', 'off', 'position', [10, 10, 672, 512] );
 ax=axes('parent',h);
-[y,x2] = hist(x,100);
+[y,x2] = hist(in,100);
 h2 = bar(ax,x2,y/(sum(y)*(x2(2)-x2(1))),'hist');
 set(h2,'FaceColor',[0 0.5 1],'EdgeColor',[0 0 1]);
 title(filename);
 hold on
-y2 = lognpdf(x2,mu,sigma);
+y2 = ksdensity(in(in>0),x2,'support','positive');
 plot(ax,x2,y2,'Color','black','LineWidth',1.5)
 yL = get(ax,'YLim');
-line([vline vline],yL,'Color','r','LineWidth',1.5);
+line([vline(1) vline(1)],yL,'Color','r','LineWidth',1.5);
+line([vline(2) vline(2)],yL,'Color','r','LineWidth',1.5);
 hold off
 saveas (ax, filename, 'pdf' );
 close(h);
 end
 
-function [y,meanlogx,sigmalogx] = areafilter(x)
-L = length(x);
+function [afarray,afthresh,meanlogx,sigmalogx] = areafilter(in)
+L = length(in);
 %assume area is distributed as a log-normal distribution
-logx = log(x);
+logx = log(in);
 %assume there are outliers. We want to ignore these outliers while fitting
 %the normal distribution, so we discard the bottom and top 10%.
 logx = sort(logx);
@@ -189,36 +217,67 @@ if goodfitbool
     disp('The distribution of nuclei areas is not log-normal. Check to see if it is bi-modal.')
 end
 %Use 3 sigma below the mean as the cutoff for nucleus size
-y = exp(meanlogx - 3*sqrt(varlogx));
+afthresh = exp(meanlogx - 3*sqrt(varlogx));
+afarray = in>afthresh;
 end
 
-function [y,paramhat] = formfactorfilter(x)
-L = length(x);
-logx = -log(x);
-%fit with Weibull distribution. First all values must be positive.
-temp = logx(logx>0);
-logx(logx<=0) = min(temp);
-paramhat = wblfit(logx);
-[~,x2] = hist(logx,100);
-y2 = wblcdf(x2,paramhat(1),paramhat(2));
-%Find the CDF of the data for the kstest
-logx = sort(logx);
-x3 = logx(1:floor(L/99):L);
-x3 = x3(1:100);
-p = ((1:100)-0.5)' ./ 100;
-[xcdf,ycdf] = stairs(x3,p);
+function [fffarray,fffthresh] = formfactorfilter(in)
+x = -log(in);
+x = x(x>0);
+[y,xi] = ksdensity(x,'support','positive');
+fffthresh(2) = exp(0);
+fffthresh(1) = exp(-xi(triangleThreshCore(y)));
+fffarray = in>fffthresh(1) & in<fffthresh(2);
 end
 
-function [y] = compactnessfilter(x)
-L = length(x);
-logx = log(x);
-
-y = logx;
+function [cfarray,cfthresh] = compactnessfilter(in)
+x = in(in>1);
+x = log(x);
+[y,xi] = ksdensity(x,'support','positive');
+cfthresh(1) = exp(0);
+cfthresh(2) = exp(xi(triangleThreshCore(y)));
+cfarray = in>cfthresh(1) & in<cfthresh(2);
 end
 
-function [y] = solidity(x)
-L = length(x);
-logx = -log(x);
+function [sfarray,sfthresh] = solidityfilter(in)
+x = -log(in);
+x = x(x>0);
+[y,xi] = ksdensity(x,'support','positive');
+thresh1 = xi(triangleThreshCore(y));
+x2 = x(x>thresh1);
+[y,xi] = ksdensity(x2,'support','positive');
+sfthresh(2) = exp(0);
+sfthresh(1) = exp(-xi(triangleThreshCore(y)));
+sfarray = in>sfthresh(1) & in<sfthresh(2);
+end
 
-y = logx;
+function [ind2] = triangleThreshCore(n)
+%Find the highest peak the histogram
+[c,ind]=max(n);
+%Assume the long tail is to the right of the peak and envision a line from
+%the top of this peak to the end of the histogram.
+%The slope of this line, the hypotenuse, is calculated.
+x1=0;
+y1=c;
+x2=length(n)-ind;
+y2=n(end);
+m=(y2-y1)/(x2-x1); %The slope of the line
+
+%----- Find the greatest distance -----
+%We are looking for the greatest distance betweent the histrogram and line
+%of the triangle via perpendicular lines
+%The slope of all lines perpendicular to the histogram hypotenuse is the
+%negative reciprocal
+p=-1/m; %The slope is now the negative reciprocal
+%We now have two slopes and two points for two lines. We now need to solve
+%this two-equation system to find their intersection, which can then be
+%used to calculate the distances
+iarray=(0:(length(n)-ind));
+L=zeros(size(n));
+for i=iarray
+    intersect=(1/(m-p))*[-p,m;-1,1]*[c;n(i+ind)-p*i];
+    %intersect(1)= y coordinate, intersect(2)= x coordinate
+    L(i+ind)=sqrt((intersect(2)-i)^2+(intersect(1)-n(i+ind))^2);
+end
+[~,ind2]=max(L);
 end
