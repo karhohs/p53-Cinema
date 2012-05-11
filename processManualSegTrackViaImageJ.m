@@ -164,11 +164,11 @@ for i=1:length(pos_unique)
     end
     %initialized struct for quantified fluorescent intensities etc.
     [unitOfLife(:).velocity]=deal(zeros(1,length(time{3})));
-    [unitOfLife(:).centroid]=deal(zeros(1,length(time{3})));
-    [unitOfLife(:).nuclearSolidity]=deal(zeros(1,length(time{3})));
+    %[unitOfLife(:).centroid]=deal(zeros(1,length(time{3})));
+    %[unitOfLife(:).nuclearSolidity]=deal(zeros(1,length(time{3})));
     [unitOfLife(:).meanIntensity]=deal(zeros(1,length(time{3})));
-    [unitOfLife(:).cytoplasmArea]=deal(zeros(1,length(time{3})));
-    [unitOfLife(:).nucleusArea]=deal(zeros(1,length(time{3})));
+    %[unitOfLife(:).cytoplasmArea]=deal(zeros(1,length(time{3})));
+    %[unitOfLife(:).nucleusArea]=deal(zeros(1,length(time{3})));
     %for each cell in that stack...
     %distill the data from the movie
     fprintf('\n'); disp(['crunching data in ',p.Results.fluorchan,' of Pos',num2str(pos_unique(i))])
@@ -218,7 +218,7 @@ for i = 1:size(IM,3)
                 %roipoly and their mean intensities are stored in the output array
                 BW = roipoly(IM(:,:,i),xellipse,yellipse); %BW is a binary mask
                 IM_temp = IM(:,:,i);
-                unitOfLife(j).meanIntensity(i) = mean(mean(IM_temp(BW)));
+                unitOfLife(j).meanIntensity(i) = mean(IM_temp(BW));
                 fprintf(1,'.');
             end
         case 'watershed'
