@@ -59,6 +59,15 @@ pos_unique = unique(pos_all);
 uol_ind = strcmpi('cell',log_txt);
 uol_all = log_num(:,uol_ind);
 dirConLogsArray = 1:length(dirConLogs);
+parent_ind = strcmpi('parent',log_txt);
+start_ind = strcmpi('start',log_txt);
+end_ind = strcmpi('end',log_txt);
+temp = cell(1,numberOfCells);
+for i =1:numberOfCells
+   temp{i} = [log_num(i,start_ind) log_num(i,end_ind)]; 
+end
+[unitOfLife(:).divisionTime] = deal(temp{:});
+[unitOfLife(:).parent] = deal(log_num(:,parent_ind)');
 for j=1:numberOfCells
     %find the text file holding the segmentation and tracking info
     pos = pos_all(j);
@@ -135,9 +144,8 @@ for i=1:length(pos_unique)
         end
     end
     if isempty(stack_filename)
-        warning('ManSeg:stackMissing', ...
-            'Could not locate stack for position "%s".', pos_unique(i))
-        continue
+        error('ManSeg:stackMissing', ...
+            'Could not locate stack for position "%s".', num2str(pos_unique(i)))
     end
     %Import stack of images (this is probably done inefficiently)
     filename_stack = fullfile(stackpath,stack_filename);
@@ -161,19 +169,27 @@ for i=1:length(pos_unique)
         map(k,unitOfLife(j).timePoints) = j;
         unitOfLife(j).uid = ['pos ' num2str(pos_all(j)) ' cell ' num2str(uol_all(j)) ' timestamp ' time{1}{unitOfLife(j).timePoints(1)}];
         unitOfLife(j).originImage = [filename_stack ':' num2str(unitOfLife(j).timePoints(1))];
+        unitOfLife(j).velocity=zeros(1,length(time{3}));
+        unitOfLife(j).meanIntensity=zeros(1,length(time{3}));
     end
-    %initialized struct for quantified fluorescent intensities etc.
-    [unitOfLife(:).velocity]=deal(zeros(1,length(time{3})));
-    %[unitOfLife(:).centroid]=deal(zeros(1,length(time{3})));
-    %[unitOfLife(:).nuclearSolidity]=deal(zeros(1,length(time{3})));
-    [unitOfLife(:).meanIntensity]=deal(zeros(1,length(time{3})));
-    %[unitOfLife(:).cytoplasmArea]=deal(zeros(1,length(time{3})));
-    %[unitOfLife(:).nucleusArea]=deal(zeros(1,length(time{3})));
     %for each cell in that stack...
     %distill the data from the movie
     fprintf('\n'); disp(['crunching data in ',p.Results.fluorchan,' of Pos',num2str(pos_unique(i))])
     unitOfLife = distillDataFromMovie(map,unitOfLife,p.Results.method,IM);
 end
+for i = 1:size(unitOfLife,2)
+    unitOfLife(i).meanIntensity = unitOfLife(i).meanIntensity(unitOfLife(i).timePoints);
+    %calculate the velocity of the centroid
+    distanceTraveled = zeros(size(unitOfLife(i).timePoints));
+    for j=2:length(distanceTraveled);
+        distanceTraveled(j) = norm(unitOfLife(i).manualCentroid(j)-unitOfLife(i).manualCentroid(j-1));
+    end
+    unitOfLife(i).velocity = distanceTraveled;
+end
+%Update the unitOfLife structure with division information
+%Assume the columns are 'position', 'cell', 'division', 'parent', 'start',
+%and 'end'.
+
 save('dynamics','unitOfLife');
 end
 
@@ -216,7 +232,7 @@ for i = 1:size(IM,3)
                 end
                 %The pixels within the elipse are determined with the function
                 %roipoly and their mean intensities are stored in the output array
-                BW = roipoly(IM(:,:,i),xellipse,yellipse); %BW is a binary mask
+                BW = roipoly(IM(:,:,i),yellipse,xellipse); %BW is a binary mask
                 IM_temp = IM(:,:,i);
                 unitOfLife(j).meanIntensity(i) = mean(IM_temp(BW));
                 fprintf(1,'.');
