@@ -52,7 +52,7 @@ mp3(ringIM) = 0;
 maxProj2(:,:,1) = mp1;
 maxProj2(:,:,2) = mp2;
 maxProj2(:,:,3) = mp3;
-imwrite(uint8(maxProj2),fullfile(fout,'circles.tif'),'tif','WriteMode','append','Compression','none');
+imwrite(uint8(maxProj2),fullfile(fout,'circles.TIF'),'tif','WriteMode','append','Compression','none');
 
 end
 
