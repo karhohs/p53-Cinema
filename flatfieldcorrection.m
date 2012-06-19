@@ -65,7 +65,7 @@ else
         if Temp
             tempstr1 = regexp(stacknames2{j},'.*(?=_s\d+)','match','once','ignorecase');
             tempstr2 = regexp(stacknames2{j},'(?<=_w\d+).*','match','once','ignorecase');
-            stacknames2{j} = [tempstr1 channels_stacks{str2double(Temp)} tempstr2];          
+            stacknames2{j} = [tempstr1 channels_stacks{str2double(Temp)} tempstr2];
         end
     end
     %For every channel in scanslide there is assumed to be a birds-eye-view
@@ -405,6 +405,9 @@ end
 end
 
 function [] = signalCompletionWithSound()
-[y, Fs] = wavread('completion.wav');
-sound(y,Fs);
+if exist(playerkwk,1)
+    play(playerkwk);
+else
+    disp('Victory over Data!')
+end
 end
