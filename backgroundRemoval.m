@@ -31,43 +31,44 @@ tempfoldername=[tempfoldername{end},'_bkgd'];
 bkgdstackpath=[stackpath,'\..\',tempfoldername];
 if ~exist(bkgdstackpath,'dir')
     mkdir(bkgdstackpath);
-    for i=1:length(stacknames)
-        disp(['Subtracting background from ',stacknames{i}])
-        info = imfinfo([stackpath,'\',stacknames{i}],'tif');
-        t = Tiff([stackpath,'\',stacknames{i}],'r');
-        Name = regexprep(stacknames{i},'(?<=_t)(\w*)(?=\.)','$1_bkgd');
-        Name = fullfile(bkgdstackpath,Name);
-        if length(info) > 1
-            for k=1:length(info)-1
-                IM = double(t.read);
-                IM=bkgdmethods(IM,p2);
-                IM = uint16(IM);
-                imwrite(IM,Name,'tif','WriteMode','append','Compression','none');
-                t.nextDirectory;
-            end
-            %one last time without t.nextDirectory
-            IM = double(t.read);
-            IM = bkgdmethods(IM,p2);
-            IM = uint16(IM);
-            imwrite(IM,Name,'tif','WriteMode','append','Compression','none');
-        else
-            IM = double(t.read);
-            IM = bkgdmethods(IM,p2);
-            IM = uint16(IM);
-            imwrite(IM,Name,'tif','WriteMode','append','Compression','none');
-        end
-        %add image description from old stack to new stack
-        t.setDirectory(1)
-        metadata = t.getTag('ImageDescription');
-        t.close;
-        t = Tiff(Name,'r+');
-        t.setTag('ImageDescription',metadata);
-        t.rewriteDirectory;
-        t.close;
-    end
 else
-    disp('Note: Background subtraction has occurred previously.')
+    disp('Note: Background substraction destination folder already exists.')
 end
+for i=1:length(stacknames)
+    disp(['Subtracting background from ',stacknames{i}])
+    info = imfinfo([stackpath,'\',stacknames{i}],'tif');
+    t = Tiff([stackpath,'\',stacknames{i}],'r');
+    Name = regexprep(stacknames{i},'(?<=_t)(\w*)(?=\.)','$1_bkgd');
+    Name = fullfile(bkgdstackpath,Name);
+    if length(info) > 1
+        for k=1:length(info)-1
+            IM = double(t.read);
+            IM=bkgdmethods(IM,p2);
+            IM = uint16(IM);
+            imwrite(IM,Name,'tif','WriteMode','append','Compression','none');
+            t.nextDirectory;
+        end
+        %one last time without t.nextDirectory
+        IM = double(t.read);
+        IM = bkgdmethods(IM,p2);
+        IM = uint16(IM);
+        imwrite(IM,Name,'tif','WriteMode','append','Compression','none');
+    else
+        IM = double(t.read);
+        IM = bkgdmethods(IM,p2);
+        IM = uint16(IM);
+        imwrite(IM,Name,'tif','WriteMode','append','Compression','none');
+    end
+    %add image description from old stack to new stack
+    t.setDirectory(1)
+    metadata = t.getTag('ImageDescription');
+    t.close;
+    t = Tiff(Name,'r+');
+    t.setTag('ImageDescription',metadata);
+    t.rewriteDirectory;
+    t.close;
+end
+
 end
 
 function [S]=bkgdmethods(S,p)
@@ -173,9 +174,9 @@ switch lower(p.met)
                 error('bkgd:Whatever','How did you get here?');
         end
         
-            bkgd=gridscan(S,@gaussianthreshold,round(sel));
-            S=S-bkgd;
-            S(S<0)=0;
+        bkgd=gridscan(S,@gaussianthreshold,round(sel));
+        S=S-bkgd;
+        S(S<0)=0;
         
     case 'uri'
         %This algorithm seems to work well when the sel value is about the
@@ -209,10 +210,10 @@ switch lower(p.met)
                 sel = sel/2;
             otherwise
                 error('bkgd:Whatever','How did you get here?');
-        end        
-            bkgd=gridscan(S,@rankfilter,sel);
-            S=S-bkgd;
-            S(S<0)=0;        
+        end
+        bkgd=gridscan(S,@rankfilter,sel);
+        S=S-bkgd;
+        S(S<0)=0;
     case 'tonia'
     otherwise
         error('Unknown method of background subtraction specified')
