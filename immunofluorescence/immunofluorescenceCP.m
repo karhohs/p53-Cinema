@@ -94,6 +94,9 @@ myplothist(myData,'TotalNucleiYFP')
 myData = nucleiMeanIntensityCy5_array.*nucleiArea_array;
 myData = myData(nucleiLogic);
 myplothist(myData,'TotalNucleiCy5')
+
+my_plotregression(nucleiMeanIntensityYFP_array,nucleiMeanIntensityCy5_array)
+my_plotcoefofvar(nucleiMeanIntensityYFP_array,nucleiMeanIntensityCy5_array)
 end
 
 function [y] = linearizeContentsOfCell(x,numolu)
@@ -104,6 +107,40 @@ for i = 1:length(x)
     y(counter:temp+counter-1) = x{i};
     counter = counter+temp;
 end
+end
+
+function [] = my_plotregression(nucleiMeanIntensityYFP_array,nucleiMeanIntensityCy5_array)
+h=figure ( 'visible', 'off', 'position', [10, 10, 672, 512] );
+ax = plotregression(log(nucleiMeanIntensityYFP_array'),log(nucleiMeanIntensityCy5_array'));
+xlabel(ax,'p53-YFP (Target)')
+saveas (ax, 'linearregression', 'pdf' );
+close(h);
+end
+
+function [] = my_plotcoefofvar(nucleiMeanIntensityYFP_array,nucleiMeanIntensityCy5_array)
+h=figure ( 'visible', 'off', 'position', [10, 10, 672, 512] );
+ax=axes('parent',h);
+datain = log(nucleiMeanIntensityCy5_array);
+[~,yyy] = hist(datain,20);
+p53axis = zeros(1,19);
+p53cov = zeros(1,19);
+for i = 2:20
+    temp = log(nucleiMeanIntensityYFP_array(((datain<yyy(i)) & (datain<yyy(i-1)))));
+    if length(temp)<20
+        p53axis(i-1) = NaN;
+        p53cov(i-1) = NaN;
+    else
+        p53std = std(temp);
+        p53m = mean(temp);
+        p53axis(i-1) = (yyy(i)-yyy(i-1))/2+yyy(i-1);
+        p53cov(i-1) = abs(p53std/p53m);
+    end
+end
+plot(p53axis,p53cov,'.','MarkerSize',20)
+xlabel(ax,'log(p53-YFP) A.U.')
+ylabel(ax,'p53-YFP coefficient of variation')
+saveas (ax, 'cov', 'pdf' );
+close(h);
 end
 
 function [] = myplothist(in,filename)
