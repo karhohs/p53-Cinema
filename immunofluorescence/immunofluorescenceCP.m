@@ -112,7 +112,7 @@ end
 function [] = my_plotregression(nucleiMeanIntensityYFP_array,nucleiMeanIntensityCy5_array)
 h=figure ( 'visible', 'off', 'position', [10, 10, 672, 512] );
 ax = plotregression(log(nucleiMeanIntensityYFP_array'),log(nucleiMeanIntensityCy5_array'));
-xlabel(ax,'p53-YFP (Target)')
+xlabel('p53-YFP (Target)')
 saveas (ax, 'linearregression', 'pdf' );
 close(h);
 end
