@@ -196,6 +196,8 @@ for bigInd = 1:length(stacknames)
     %3D scatter plot
     %[y2,x2,z2] = ind2sub(s,fociarray);
     %scatter3(x2,y2,z2)
+    Name = regexprep(stacknames2{bigInd},'(\w*)(?=\.)','$1_maxProj');
+    smfishPlot([dataName '.mat'],smfishstackpath,Name,stacknames2{bigInd});
 end
 signalCompletionWithEmail();
 signalCompletionWithSound();
@@ -552,8 +554,12 @@ pixelRatio = sigmaZ/sigmaXY;
 end
 
 function [] = signalCompletionWithSound()
-[y, Fs] = wavread('completion.wav');
-sound(y,Fs);
+global playerkwk
+if ~isempty(playerkwk)
+    play(playerkwk);
+else
+    disp('Victory over Data!')
+end
 end
 
 function [] = signalCompletionWithEmail()
