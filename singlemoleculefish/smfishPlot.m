@@ -1,17 +1,21 @@
-function [] = smfishPlot(path2mat,folderout,path2maxproj)
+function [] = smfishPlot(path2mat,folderout,path2maxproj,fn)
 global fout
 global maxproj
+global filename
 maxproj = imread(path2maxproj,'tiff');
 fout = folderout;
+filename = fn;
 data = open(path2mat);
 rings(data.fociarray,data.sizeOfImage)
 clear global fout
 clear global maxproj
+clear global filename
 end
 
 function [] = rings(fociarray,sizeOfImage)
 global fout
 global maxproj
+global filename
 linewidth = 1;
 circleradiusbase = 5; %units in pixels
 circlecircumference = 2*pi*circleradiusbase;
@@ -42,6 +46,9 @@ for k = 1:linewidth;
     end
 end
 ringIM = logical(ringIM);
+ringPicture = zeros(sizeOfImage(1),sizeOfImage(2),3);
+ringPicture(:,:,1) = 255*ringIM;
+ringPicture(:,:,2) = 255*ringIM;
 maxProj2 = zeros(sizeOfImage(1),sizeOfImage(2),3);
 mp1 = maxproj;
 mp1(ringIM) = 255;
@@ -52,8 +59,10 @@ mp3(ringIM) = 0;
 maxProj2(:,:,1) = mp1;
 maxProj2(:,:,2) = mp2;
 maxProj2(:,:,3) = mp3;
-imwrite(uint8(maxProj2),fullfile(fout,'circles.TIF'),'tif','WriteMode','append','Compression','none');
-
+name = regexprep(filename,'(\w*)(?=\.)','$1_circlesANDmaxproj');
+imwrite(uint8(maxProj2),fullfile(fout,name),'tif','Compression','none');
+name = regexprep(filename,'(\w*)(?=\.)','$1_circles');
+imwrite(uint8(ringPicture),fullfile(fout,name),'tif','Compression','none');
 end
 
 function [] = graphtemplate()
