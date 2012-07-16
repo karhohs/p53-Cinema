@@ -405,7 +405,8 @@ end
 end
 
 function [] = signalCompletionWithSound()
-if exist(playerkwk,1)
+global playerkwk
+if ~isempty(playerkwk)
     play(playerkwk);
 else
     disp('Victory over Data!')
