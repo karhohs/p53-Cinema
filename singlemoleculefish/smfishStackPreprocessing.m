@@ -7,7 +7,7 @@ parameters.objective = 60; %as in 60x
 parameters.NA = 1.4; %typical of 60x oil immersion objections
 parameters.rindex = 1.51; %typical refractive index of oil
 parameters.camerapixellength = 6.45; %Both cameras in the Lahav have pixel dimensions of 6.45 x 6.45 um.
-parameters.zstepsize = 0.25; %User defined with z-stack is obtained
+parameters.zstepsize = 0.3; %User defined with z-stack is obtained
 parameters.wavelength = .67; %Cy5 probe wavelength approximately 670 nanometers
 
 %----- Parse varargin -----
