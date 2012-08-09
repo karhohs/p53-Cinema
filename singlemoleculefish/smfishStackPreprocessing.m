@@ -52,10 +52,11 @@ for i=1:length(stacknames)
     Name_temp = regexprep(Name_temp,'camera','','ignorecase'); %remove 'camera' if present b/c it is not informative
     stacknames2(i) = Name_temp;
 end
-parameters.stacknametest = [stackpath '\' stacknames{1}];
-[IM,sizeOfImage,hLoG,tempI1,tempI2,hMeanxy,hMeanz,IMMeanIntensity,hGaus,xy,z,pixelRatio] = variableInitialization(parameters);
+
 for bigInd = 1:length(stacknames)
     %----- Load the image file -----
+    parameters.stacknametest = [stackpath '\' stacknames{bigInd}];
+    [IM,sizeOfImage,hLoG,tempI1,tempI2,hMeanxy,hMeanz,IMMeanIntensity,hGaus,xy,z,pixelRatio] = variableInitialization(parameters);
     IM = loadZstack([stackpath '\' stacknames{bigInd}],IM,sizeOfImage);
     dataName = regexprep(stacknames2{bigInd},'(?<=_t)(\w*)(?=\.)','$1_data');
     dataName = regexp(dataName,'.*(?=\.)','match','once');
@@ -400,11 +401,11 @@ while logicStepCounter ~= 0
             n3der = smooth(n3der);
             for i = 2:length(n3der);
                 if (n3der(i-1)<0 && n3der(i)>=0)
-                        ind = i-1;
-                        break
+                    ind = i-1;
+                    break
                 elseif (abs(n3der(i-1))<=1) && (n3(i-1) == 0 || n3(i-1) == 1 || n3(i-1) == 2)
-                        ind = i-1;
-                        break
+                    ind = i-1;
+                    break
                 end
             end
             threshold = xout3(ind);
