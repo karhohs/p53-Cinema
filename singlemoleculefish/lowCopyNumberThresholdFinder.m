@@ -1,5 +1,5 @@
 function [] = lowCopyNumberThresholdFinder(smfishpath,varargin)
-    % [] = lowCopyNumberThresholdFinder(smfishpath,'manualthresh',false)
+% [] = lowCopyNumberThresholdFinder(smfishpath,'manualthresh',false)
 % Input:
 % smfishpath: a char. The path to the folder that contains the output from
 % smfishStackPreprocessing().
@@ -16,21 +16,21 @@ function [] = lowCopyNumberThresholdFinder(smfishpath,varargin)
 % The idea is that the automatic detection of foci in the case where the
 % number of foci per cell is very low, <5, can be improved by considering a
 % whole collection of images instead of just one (that may only have a few
-% cells to begin with). I have observed that many of the  
+% cells to begin with). I have observed that many of the
 % foci identified in low copy number situations are questionable, because
 % they are either very dim or located extra-cellularly.
 %
 % There will also be an option to choose the threshold manually.
 %
 % Other Notes:
-% 
+%
 
 p = inputParser;
 p.addRequired('smfishpath', @(x)ischar(x));
 p.addParamValue('manualthresh', false, @(x)islogical(x));
 p.parse(smfishpath, varargin{:});
 if p.Results.manualthresh
-
+    
 end
 
 %Read the directory where all the .mat files of fish data are kept.
@@ -93,7 +93,7 @@ for i = 1:length(datanames)
     fociarray = spotStatTemp.spotStat3(ind:end,2);
     numfoci_after = numfoci_after + length(fociarray);
     save(dataName,'fociarray','-append');
-        %sum projection of foci
+    %sum projection of foci
     sumProj = sum(foci,3);
     Name = regexprep(datanames{i},'(\w*)_data.*','$1_sumProj.tif');
     imwrite(uint8(sumProj),[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
@@ -101,17 +101,33 @@ for i = 1:length(datanames)
     Name = regexprep(datanames{i},'(\w*)_data.*','$1_circles.tif');
     imwrite(uint8(pic),[smfishstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
 end
-dispchar = ['foci before = ' numfoci_before ' and foci after = ' numfoci_after];
-disp(dispchar)
+str = sprintf('foci before = %d and foci after = %d \n The new threshold is %f', numfoci_before, numfoci_after, threshold);
+disp(str)
+
+%Generate a report
+hist(spotStatArray,200)
+title('global')
+spotStatMean = zeros(size(spotStatCell));
+for i=1:length(datanames)
+    spotStatTemp = load(fullfile(smfishpath,datanames{i}), 'threshold');
+    thresh = spotStatTemp.threshold;
+    spotStatMean(i) = mean(spotStatCell{i}(spotStatCell{i}>thresh));
+    figure
+    hist(spotStatCell{i},200)
+    [thresh2,~,~,~,~] = triminthresh(spotStatCell{i});
+    str = sprintf('%d: thresh = %f, thresh2 = %f',i,thresh,thresh2);
+    title(str)
+end
+figure
+plot(spotStatMean,'o','MarkerEdgeColor','k','MarkerFaceColor',[.49 1 .63], 'MarkerSize',8)
 end
 
 function [threshold,n,xout,n2,xout2] = triminthresh(A)
-%Calculate a few rank statistics (assumes A is already sorted)
+A = sort(A);
 la = length(A);
 q1a = A(round(0.25*la)); %first quartile
 q2a = A(round(0.50*la));
-q3a = A(round(0.75*la)); %third quartile
-myIQRa = q3a-q1a;
+myIQRa = 2*(q2a-q1a);
 myCutoffa = 3*myIQRa+q2a;
 %Create the histogram
 [n,xout]=hist(A,100);
@@ -124,13 +140,28 @@ B = A(A>threshold);
 [n2,xout2] = hist(B,100);
 n2der = smooth(n2);
 n2der = conv(n2der,[0.5 0 -0.5],'same'); %the central difference derivative to find the min
+sumn2 = zeros(size(n2));
+for i=1:length(n2)
+    sumn2(i) = sum(n2(i:end));
+end
+p = n2der'./sumn2;
 for i = 2:length(n2der);
-    if (n2der(i-1)<0 && n2der(i)>=0)
+    if (n2der(i-1)<0 && n2der(i)>=0) %tests for a minimum using the first derivative
         ind = i-1;
         break
-    elseif (abs(n2der(i-1))<=1) && (n2(i-1) == 0 || n2(i-1) == 1 || n2(i-1) == 2)
+    elseif (abs(n2der(i-1))<=1) && (n2(i-1) == 0 || n2(i-1) == 1 || n2(i-1) == 2) %tests for a flat region where the change in foci is less than 1
         ind = i-1;
+        for j = 2:length(n2der)
+            if (abs(p(j))<0.03 && ((p(j)-p(j-1))>0)) %tests for a minimal about of change: less than 3% of foci beyond hypothetical threshold
+                ind2 = j-1;
+                if ind2<ind
+                    ind = ind2;
+                end
+                break
+            end
+        end
         break
+        
     end
 end
 threshold = xout2(ind);
