@@ -22,7 +22,7 @@ function varargout = manualTracking(varargin)
 
 % Edit the above text to modify the response to help manualTracking
 
-% Last Modified by GUIDE v2.5 21-Sep-2012 01:43:32
+% Last Modified by GUIDE v2.5 21-Sep-2012 16:15:15
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -58,8 +58,8 @@ handles.output = hObject;
 % Update handles structure
 guidata(hObject, handles);
 
-mydata.ind = 1;
-guidata(hObject, mydata);
+handles.ind = 1;
+guidata(hObject, handles);
 % UIWAIT makes manualTracking wait for user response (see UIRESUME)
 % uiwait(handles.figure1);
 
@@ -187,16 +187,16 @@ end
 
 
 % --- Executes on button press in pushbuttonPrev.
-function pushbuttonPrev_Callback(hObject, eventdata, handles, mydata)
+function pushbuttonPrev_Callback(hObject, eventdata, handles)
 % hObject    handle to pushbuttonPrev (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-if mydata.ind~=1
-   mydata.ind = mydata.ind - 1;
+if handles.ind~=1
+   handles.ind = handles.ind - 1;
 end
-set(handles.editCurrentCell,'String',num2str(mydata.ind));
+set(handles.editCurrentCell,'String',num2str(handles.ind));
 plot(handles.axes1);
-guidata(hObject, mydata);
+guidata(hObject, handles);
 
 % --- Executes on button press in pushbuttonNext.
 function pushbuttonNext_Callback(hObject, eventdata, handles)
@@ -213,6 +213,11 @@ function editCurrentCell_Callback(hObject, eventdata, handles)
 
 % Hints: get(hObject,'String') returns contents of editCurrentCell as text
 %        str2double(get(hObject,'String')) returns contents of editCurrentCell as a double
+currentInd = str2double(get(handles.edit_currentcell,'String'));
+handles.ind = currentInd;
+h = axes(handles.axes1);
+plot(h, mysignal(:,currentInd));
+guidata(hObject, handles);
 
 
 % --- Executes during object creation, after setting all properties.
@@ -256,8 +261,8 @@ function pushbuttonDataPath_Callback(hObject, eventdata, handles)
 % hObject    handle to pushbuttonDataPath (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-folder_name = uigetdir;
-set(handles.editDataPath,'String',folder_name);
+[filename, foldername, ~] = uigetfile;
+set(handles.editDataPath,'String',fullfile(foldername, filename));
 
 % --- Executes on button press in pushbuttonLoadData.
 function pushbuttonLoadData_Callback(hObject, eventdata, handles)
@@ -269,3 +274,28 @@ load(datapath);
 c = clock;
 set(handles.textLoadData, 'String', sprintf('Data Loaded! @ %02d:%02d',c(4),c(5)));
 set(handles.textLoadData, 'Visible', 'on');
+handles.data = unitOfLife;
+guidata(hObject, handles);
+
+
+
+function editRatio_Callback(hObject, eventdata, handles)
+% hObject    handle to editRatio (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of editRatio as text
+%        str2double(get(hObject,'String')) returns contents of editRatio as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function editRatio_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to editRatio (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
