@@ -51,7 +51,7 @@ end
 %How many cell tracks are there?
 numberOfCells = size(log_num,1);
 %Initialize the struct that holds all the cellular information
-unitOfLife = struct('timePoints', {}, 'time', {}, 'timeUnits', {}, 'nucleusArea', {}, 'cytoplasmArea', {}, 'meanIntensity', {},'meanIntensityHeader', {},'parent', {}, 'nuclearSolidity', {}, 'divisionTime', {}, 'manualCentroid', {}, 'major', {},'minor', {}, 'angle', {},'centroid', {},'velocity', {}, 'uid', {}, 'originImageFileName', {}, 'originImageDirectory', {});
+unitOfLife = struct('timePoints', {}, 'time', {}, 'timestamps', {}, 'timeUnits', {}, 'nucleusArea', {}, 'cytoplasmArea', {}, 'meanIntensity', {},'meanIntensityHeader', {},'parent', {}, 'nuclearSolidity', {}, 'divisionTime', {}, 'manualCentroid', {}, 'major', {},'minor', {}, 'angle', {},'centroid', {},'velocity', {}, 'uid', {}, 'originImageFileName', {}, 'originImageDirectory', {});
 unitOfLife(numberOfCells).time = []; %initialize the struct
 %----- Import all of the pertinent manual segmentation and tracking
 %information from a folder of text files into the unitOfLife struct. -----
@@ -167,6 +167,7 @@ for i=1:length(pos_unique)
     for k=1:length(numberOfCellsArray)
         j = numberOfCellsArray(k);
         unitOfLife(j).time = time{3}(unitOfLife(j).timePoints);
+        unitOfLife(j).timestamps = time{1}(unitOfLife(j).timePoints);
         unitOfLife(j).timeUnits = tUnit;
         map(k,unitOfLife(j).timePoints) = j;
         unitOfLife(j).uid = sprintf('pos %d cell %d timestamp %s', pos_all(j), uol_all(j), time{1}{unitOfLife(j).timePoints(1)});%['pos ' num2str(pos_all(j)) ' cell ' num2str(uol_all(j)) ' timestamp ' time{1}{unitOfLife(j).timePoints(1)}];
