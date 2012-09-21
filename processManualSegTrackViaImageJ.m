@@ -25,6 +25,7 @@ p.parse(logpath, stackpath, varargin{:});
 %----- Load divisions file -----
 %first, find the divisions file.
 dirConLogs = dir(logpath);
+temp = false;
 for i=1:length(dirConLogs)
     [logFile, tok] = regexpi(dirConLogs(i).name,'divisions\.(\w+)','match','tokens','once');
     if ~isempty(logFile)
@@ -33,7 +34,8 @@ for i=1:length(dirConLogs)
     end
 end
 if temp == false %does the division file exist
-    error('manSeg:noDiv',['The ', logpath, ' directory does not contain a divisions file']);
+    disp(logpath)
+    error('manSeg:noDiv','The %s directory does not contain a divisions file. \nPlease make sure the file is spelled with an "s".',logpath);
 end
 %second, check if it is MS xlsx OR just plain .txt
 switch tok{1}
@@ -49,7 +51,7 @@ end
 %How many cell tracks are there?
 numberOfCells = size(log_num,1);
 %Initialize the struct that holds all the cellular information
-unitOfLife = struct('timePoints', {}, 'time', {}, 'timeUnits', {}, 'nucleusArea', {}, 'cytoplasmArea', {}, 'meanIntensity', {},'meanIntensityHeader', {},'parent', {}, 'nuclearSolidity', {}, 'divisionTime', {}, 'manualCentroid', {}, 'major', {},'minor', {}, 'angle', {},'centroid', {},'velocity', {}, 'uid', {}, 'originImage', {});
+unitOfLife = struct('timePoints', {}, 'time', {}, 'timeUnits', {}, 'nucleusArea', {}, 'cytoplasmArea', {}, 'meanIntensity', {},'meanIntensityHeader', {},'parent', {}, 'nuclearSolidity', {}, 'divisionTime', {}, 'manualCentroid', {}, 'major', {},'minor', {}, 'angle', {},'centroid', {},'velocity', {}, 'uid', {}, 'originImageFileName', {}, 'originImageDirectory', {});
 unitOfLife(numberOfCells).time = []; %initialize the struct
 %----- Import all of the pertinent manual segmentation and tracking
 %information from a folder of text files into the unitOfLife struct. -----
@@ -167,8 +169,8 @@ for i=1:length(pos_unique)
         unitOfLife(j).time = time{3}(unitOfLife(j).timePoints);
         unitOfLife(j).timeUnits = tUnit;
         map(k,unitOfLife(j).timePoints) = j;
-        unitOfLife(j).uid = ['pos ' num2str(pos_all(j)) ' cell ' num2str(uol_all(j)) ' timestamp ' time{1}{unitOfLife(j).timePoints(1)}];
-        unitOfLife(j).originImage = [filename_stack ':' num2str(unitOfLife(j).timePoints(1))];
+        unitOfLife(j).uid = sprintf('pos %d cell %d timestamp %s', pos_all(j), uol_all(j), time{1}{unitOfLife(j).timePoints(1)});%['pos ' num2str(pos_all(j)) ' cell ' num2str(uol_all(j)) ' timestamp ' time{1}{unitOfLife(j).timePoints(1)}];
+        unitOfLife(j).originImageFileName = stack_filename;
         unitOfLife(j).velocity=zeros(1,length(time{3}));
         unitOfLife(j).meanIntensity=zeros(1,length(time{3}));
     end
@@ -189,8 +191,8 @@ end
 %Update the unitOfLife structure with division information
 %Assume the columns are 'position', 'cell', 'division', 'parent', 'start',
 %and 'end'.
-
-save('dynamics','unitOfLife');
+filename = sprintf('dynamics%s',p.Results.fluorchan);
+save(fullfile(logpath,filename),'unitOfLife');
 end
 
 function [unitOfLife]=distillDataFromMovie(map,unitOfLife,method,IM)
