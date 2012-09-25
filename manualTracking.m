@@ -153,7 +153,7 @@ stackpath = get(handles.editStackPath, 'String');
 fluorchan = get(handles.editFluorescentChannels, 'String'); %assume CSV
 C = textscan(fluorchan, '%s', 'delimiter', ', ', 'MultipleDelimsAsOne', 1);
 for i = 1:length(C{1})
-    processManualSegTrackViaImageJ(logpath, stackpath, 'fluorchan', C{1}{i})
+    processManualSegTrackViaImageJ(logpath, stackpath, 'fluorchan', C{1}{i},'phaseratio',4)
 end
 c = clock;
 set(handles.textStepTwoFinished, 'String', sprintf('Finished! @ %02d:%02d',c(4),c(5)));
@@ -195,7 +195,7 @@ if handles.ind~=1
    handles.ind = handles.ind - 1;
 end
 set(handles.editCurrentCell,'String',num2str(handles.ind));
-plot(handles.axes1);
+plot(handles.axes1, handles.data(handles.ind).meanIntensity);
 guidata(hObject, handles);
 
 % --- Executes on button press in pushbuttonNext.
@@ -203,7 +203,12 @@ function pushbuttonNext_Callback(hObject, eventdata, handles)
 % hObject    handle to pushbuttonNext (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-
+if handles.ind~=length(handles.data)
+   handles.ind = handles.ind + 1;
+end
+set(handles.editCurrentCell,'String',num2str(handles.ind));
+plot(handles.axes1, handles.data(handles.ind).meanIntensity);
+guidata(hObject, handles);
 
 
 function editCurrentCell_Callback(hObject, eventdata, handles)
@@ -213,10 +218,9 @@ function editCurrentCell_Callback(hObject, eventdata, handles)
 
 % Hints: get(hObject,'String') returns contents of editCurrentCell as text
 %        str2double(get(hObject,'String')) returns contents of editCurrentCell as a double
-currentInd = str2double(get(handles.edit_currentcell,'String'));
+currentInd = str2double(get(handles.editCurrentCell,'String'));
 handles.ind = currentInd;
-h = axes(handles.axes1);
-plot(h, mysignal(:,currentInd));
+plot(handles.axes1, handles.data(handles.ind).meanIntensity);
 guidata(hObject, handles);
 
 
