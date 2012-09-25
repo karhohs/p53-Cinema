@@ -21,6 +21,7 @@ p.addParamValue('fluorchan','YFP',@(x)ischar(x));
 p.addParamValue('timeReference','',@(x)ischar(x)||isnumeric(x));
 p.addParamValue('timeUnits','hours',@(x)ischar(x));
 p.addParamValue('method','ellipse',@(x)ischar(x));
+p.addParamValue('phaseratio',1,@(x)isnumeric(x));
 p.parse(logpath, stackpath, varargin{:});
 %----- Load divisions file -----
 %first, find the divisions file.
@@ -125,6 +126,15 @@ for j=1:numberOfCells
             unitOfLife(j).minor = manualData.data(:,index(4));
             unitOfLife(j).angle = manualData.data(:,index(5));
             unitOfLife(j).timePoints = manualData.data(:,index(6));
+            %adjust the timepoints, derived from the phase image, to match the number of timepoints found in the fluorescent images. For example, the phase images might be capture every 5 minutes, whereas the fluorescent images every 20 minutes.
+            timePointsTemp = (unitOfLife(j).timePoints + p.Results.phaseratio - 1)/p.Results.phaseratio;
+            timePointsLogical = mod(timePointsTemp,1)==0;
+            timePointsTemp = timePointsTemp(timePointsLogical);
+            unitOfLife(j).timePoints = timePointsTemp;
+            unitOfLife(j).manualCentroid = unitOfLife(j).manualCentroid(timePointsLogical,:);
+            unitOfLife(j).major = unitOfLife(j).major(timePointsLogical);
+            unitOfLife(j).minor = unitOfLife(j).minor(timePointsLogical);
+            unitOfLife(j).angle = unitOfLife(j).angle(timePointsLogical);
             dirConLogsArray(counter) = []; %Don't look at the same text file more than once
             break
         end
