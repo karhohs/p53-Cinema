@@ -44,7 +44,7 @@ warning('off','MATLAB:tifflib:libraryWarning');
 %k=wavelength). This organization facilitates the collating these images
 %into TIFF stacks.
 
-FileNames=cell(1024,256,8); %Assumes there will not be more than 1024 timepoints, 256 positions, or more than 8 channels. If there are, change this number. It has been pre-allocated for speed.
+FileNames=cell(2048,256,8); %Assumes there will not be more than 1024 timepoints, 256 positions, or more than 8 channels. If there are, change this number. It has been pre-allocated for speed.
 %FileNames(Time,Position,Channel)
 disp(['working in ', path]); %Collect the directory contents
 dirCon = dir(path);
