@@ -22,7 +22,7 @@ function varargout = manualTracking(varargin)
 
 % Edit the above text to modify the response to help manualTracking
 
-% Last Modified by GUIDE v2.5 21-Sep-2012 16:15:15
+% Last Modified by GUIDE v2.5 29-Sep-2012 20:51:09
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -59,6 +59,10 @@ handles.output = hObject;
 guidata(hObject, handles);
 
 handles.ind = 1;
+handles.timeind = 1;
+fluorchan = get(handles.editFluorescentChannels, 'String'); %assume CSV
+C = textscan(fluorchan, '%s', 'delimiter', ', ', 'MultipleDelimsAsOne', 1);
+handles.fluorescentChannels = C{1};
 guidata(hObject, handles);
 % UIWAIT makes manualTracking wait for user response (see UIRESUME)
 % uiwait(handles.figure1);
@@ -152,6 +156,7 @@ logpath = get(handles.editLogPath, 'String');
 stackpath = get(handles.editStackPath, 'String');
 fluorchan = get(handles.editFluorescentChannels, 'String'); %assume CSV
 C = textscan(fluorchan, '%s', 'delimiter', ', ', 'MultipleDelimsAsOne', 1);
+handles.fluorescentChannels = C{1};
 for i = 1:length(C{1})
     processManualSegTrackViaImageJ(logpath, stackpath, 'fluorchan', C{1}{i},'phaseratio',4)
 end
@@ -160,6 +165,7 @@ set(handles.textStepTwoFinished, 'String', sprintf('Finished! @ %02d:%02d',c(4),
 set(handles.textStepTwoFinished, 'Visible', 'on');
 str = sprintf('dynamics%s', C{1}{1});
 set(handles.editDataPath, 'String', fullfile(logpath,str));
+guidata(hObject, handles);
 
 
 
@@ -194,7 +200,8 @@ function pushbuttonPrev_Callback(hObject, eventdata, handles)
 if handles.ind~=1
    handles.ind = handles.ind - 1;
 end
-set(handles.editCurrentCell,'String',num2str(handles.ind));
+updateGUI(handles);
+updateImageAxes(handles)
 plot(handles.axes1, handles.data(handles.ind).meanIntensity);
 guidata(hObject, handles);
 
@@ -206,7 +213,8 @@ function pushbuttonNext_Callback(hObject, eventdata, handles)
 if handles.ind~=length(handles.data)
    handles.ind = handles.ind + 1;
 end
-set(handles.editCurrentCell,'String',num2str(handles.ind));
+updateGUI(handles);
+updateImageAxes(handles)
 plot(handles.axes1, handles.data(handles.ind).meanIntensity);
 guidata(hObject, handles);
 
@@ -220,6 +228,8 @@ function editCurrentCell_Callback(hObject, eventdata, handles)
 %        str2double(get(hObject,'String')) returns contents of editCurrentCell as a double
 currentInd = str2double(get(handles.editCurrentCell,'String'));
 handles.ind = currentInd;
+updateGUI(handles);
+updateImageAxes(handles)
 plot(handles.axes1, handles.data(handles.ind).meanIntensity);
 guidata(hObject, handles);
 
@@ -273,12 +283,21 @@ function pushbuttonLoadData_Callback(hObject, eventdata, handles)
 % hObject    handle to pushbuttonLoadData (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+handles.PhaseFilenames = importStackNames(get(handles.editPhasePath,'String'),get(handles.editPhaseName,'String'));
+for i=1:length(handles.fluorescentChannels)
+    handles.fluorescentFilenames{i} = importStackNames(get(handles.editStackPath,'String'),handles.fluorescentChannels{i});
+end
 datapath = get(handles.editDataPath, 'String');
 load(datapath);
 c = clock;
 set(handles.textLoadData, 'String', sprintf('Data Loaded! @ %02d:%02d',c(4),c(5)));
 set(handles.textLoadData, 'Visible', 'on');
 handles.data = unitOfLife;
+handles.numberOfCellsTotal = length(handles.data);
+handles.timeind = 1;
+plot(handles.axes1, handles.data(handles.ind).meanIntensity);
+updateGUI(handles);
+updateImageAxes(handles)
 guidata(hObject, handles);
 
 
@@ -295,6 +314,126 @@ function editRatio_Callback(hObject, eventdata, handles)
 % --- Executes during object creation, after setting all properties.
 function editRatio_CreateFcn(hObject, eventdata, handles)
 % hObject    handle to editRatio (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on slider movement.
+function slider1_Callback(hObject, eventdata, handles)
+% hObject    handle to slider1 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'Value') returns position of slider
+%        get(hObject,'Min') and get(hObject,'Max') to determine range of slider
+
+
+% --- Executes during object creation, after setting all properties.
+function slider1_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to slider1 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: slider controls usually have a light gray background.
+if isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor',[.9 .9 .9]);
+end
+
+function updateGUI(handles)
+set(handles.editCurrentCell,'String',num2str(handles.ind));
+set(handles.textNumcell, 'String', sprintf('of %d',handles.numberOfCellsTotal));
+
+function updateImageAxes(handles)
+axes2width = get(handles.axes2, 'Position');
+axes2height = axes2width(4);
+axes2width = axes2width(3);
+%derive the phase stack number
+positionind = regexp(handles.data(handles.ind).originImageFileName,'_s(\d+)','tokens');
+positionind = str2double(positionind{1});
+tPhase = Tiff(fullfile(get(handles.editPhasePath,'String'),handles.PhaseFilenames{positionind}),'r');
+tPhase.setDirectory(handles.timeind);
+I = tPhase.read();
+%in case images are 12-bit instead of the 16-bit TIFF container
+Iresize = imresize(I, [axes2height axes2width]);
+if max(max(I))<4095
+   imshow(Iresize,[],'Parent',handles.axes2);
+else
+imshow(Iresize,'Parent',handles.axes2);
+end
+tPhase.close();
+
+
+
+function editPhasePath_Callback(hObject, eventdata, handles)
+% hObject    handle to editPhasePath (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of editPhasePath as text
+%        str2double(get(hObject,'String')) returns contents of editPhasePath as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function editPhasePath_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to editPhasePath (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in pushbutton8.
+function pushbutton8_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton8 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+folder_name = uigetdir;
+set(handles.editPhasePath,'String',folder_name);
+
+function [Temp] = importStackNames(stackpath,fc)
+dirCon_stack  = dir(stackpath);
+expr=['.*(?<!thumb.*)_w\d+' fc '.*'];
+Temp=cell([1,length(dirCon_stack)]); %Initialize cell array
+% ----- Identify the legitimate stacks -----
+i=1;
+for j=1:length(dirCon_stack)
+    Temp2=regexp(dirCon_stack(j).name,expr,'match','once','ignorecase');
+    if Temp2
+        Temp{i}=Temp2;
+        i=i+1;
+    end
+end
+% ----- Remove empty cells -----
+Temp(i:end)=[];
+% for j=length(Temp):-1:1
+%     if isempty(Temp{j})
+%         Temp(j)=[];
+%     end
+% end
+
+
+function editPhaseName_Callback(hObject, eventdata, handles)
+% hObject    handle to editPhaseName (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of editPhaseName as text
+%        str2double(get(hObject,'String')) returns contents of editPhaseName as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function editPhaseName_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to editPhaseName (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    empty - handles not created until after all CreateFcns called
 
