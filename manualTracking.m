@@ -22,16 +22,16 @@ function varargout = manualTracking(varargin)
 
 % Edit the above text to modify the response to help manualTracking
 
-% Last Modified by GUIDE v2.5 29-Sep-2012 20:51:09
+% Last Modified by GUIDE v2.5 03-Oct-2012 08:55:58
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
 gui_State = struct('gui_Name',       mfilename, ...
-                   'gui_Singleton',  gui_Singleton, ...
-                   'gui_OpeningFcn', @manualTracking_OpeningFcn, ...
-                   'gui_OutputFcn',  @manualTracking_OutputFcn, ...
-                   'gui_LayoutFcn',  [] , ...
-                   'gui_Callback',   []);
+    'gui_Singleton',  gui_Singleton, ...
+    'gui_OpeningFcn', @manualTracking_OpeningFcn, ...
+    'gui_OutputFcn',  @manualTracking_OutputFcn, ...
+    'gui_LayoutFcn',  [] , ...
+    'gui_Callback',   []);
 if nargin && ischar(varargin{1})
     gui_State.gui_Callback = str2func(varargin{1});
 end
@@ -69,7 +69,7 @@ guidata(hObject, handles);
 
 
 % --- Outputs from this function are returned to the command line.
-function varargout = manualTracking_OutputFcn(hObject, eventdata, handles) 
+function varargout = manualTracking_OutputFcn(hObject, eventdata, handles)
 % varargout  cell array for returning output args (see VARARGOUT);
 % hObject    handle to figure
 % eventdata  reserved - to be defined in a future version of MATLAB
@@ -151,7 +151,7 @@ function pushbuttonExtractData_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 set(handles.textStepTwoFinished, 'Visible', 'off');
-pause(0.1); %this 
+pause(0.1); %this
 logpath = get(handles.editLogPath, 'String');
 stackpath = get(handles.editStackPath, 'String');
 fluorchan = get(handles.editFluorescentChannels, 'String'); %assume CSV
@@ -198,7 +198,7 @@ function pushbuttonPrev_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 if handles.ind~=1
-   handles.ind = handles.ind - 1;
+    handles.ind = handles.ind - 1;
 end
 updateGUI(handles);
 updateImageAxes(handles)
@@ -211,7 +211,7 @@ function pushbuttonNext_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 if handles.ind~=length(handles.data)
-   handles.ind = handles.ind + 1;
+    handles.ind = handles.ind + 1;
 end
 updateGUI(handles);
 updateImageAxes(handles)
@@ -350,6 +350,7 @@ set(handles.editCurrentCell,'String',num2str(handles.ind));
 set(handles.textNumcell, 'String', sprintf('of %d',handles.numberOfCellsTotal));
 
 function updateImageAxes(handles)
+%1. Show the entire field of view
 axes2width = get(handles.axes2, 'Position');
 axes2height = axes2width(4);
 axes2width = axes2width(3);
@@ -362,11 +363,81 @@ I = tPhase.read();
 %in case images are 12-bit instead of the 16-bit TIFF container
 Iresize = imresize(I, [axes2height axes2width]);
 if max(max(I))<4095
-   imshow(Iresize,[],'Parent',handles.axes2);
+    imshow(Iresize,[],'Parent',handles.axes2);
 else
-imshow(Iresize,'Parent',handles.axes2);
+    imshow(Iresize,'Parent',handles.axes2);
 end
 tPhase.close();
+%2. Show a close up of the cell (2x)
+%For the moment the window size will not be changable.
+myCentroid = handles.data(handles.ind).manualCentroid(handles.timeind,:); %myCentroid = [row, col] = [y, x]
+xm = myCentroid(2);
+ym = myCentroid(1);
+Iwidth = size(I,2);
+Iheight = size(I,1);
+x1 = xm + 83;
+x2 = xm - 84;
+y1 = ym + 63;
+y2 = ym - 64;
+if x1 > Iwidth
+    x1 = Iwidth;
+    x2 = Iwidth - 167;
+elseif x2 < 1
+    x1 = 168;
+    x2 = 1;
+end
+if y1 > Iheight
+    y1 = Iheight;
+    y2 = Iheight-127;
+elseif y2 < 1
+    y1 = 128;
+    y2 = 1;
+end
+
+I2 = I(y2:y1,x2:x1);
+%add the yellow ellipse
+xellipse=zeros(38,1);
+            yellipse=zeros(38,1);
+            rho = (0:9:333)/53;
+            rhocos=cos(rho);
+            rhosin=sin(rho);
+if handles.data(handles.ind).angle(handles.timeind) == 0 || handles.data(handles.ind).angle(handles.timeind) == 180
+                    a = round(handles.data(handles.ind).major(handles.timeind)/2);
+                    b = round(handles.data(handles.ind).minor(handles.timeind)/2);
+                elseif handles.data(handles.ind).angle(handles.timeind) == 90 || handles.data(handles.ind).angle(handles.timeind) == 270
+                    a = round(handles.data(handles.ind).minor(handles.timeind)/2);
+                    b = round(handles.data(handles.ind).major(handles.timeind)/2);
+end
+for k=1:38
+                    x=xm+a*rhocos(k);
+                    y=ym+b*rhosin(k);
+                    xellipse(k) = round(x);
+                    yellipse(k) = round(y);
+end
+Iobject = figure('Visible','off');
+imshow(I,[]);
+hold on
+for k=1:37
+    line([xellipse(k) xellipse(k+1)],[yellipse(k) yellipse(k+1)],'color','yellow');
+end
+hold off
+   I2 = getframe;
+
+Iresize = imresize(I2.cdata,2);
+    imshow(Iresize,'Parent',handles.axes3);
+
+
+%3. Show a close up of the fluorescent channel
+
+tFluo = Tiff(fullfile(get(handles.editStackPath,'String'),handles.fluorescentFilenames{1}{positionind}),'r');
+tFluo.setDirectory(handles.timeind);
+I = tFluo.read();
+I3 = I(y2:y1,x2:x1);
+Iresize = imresize(I3,2);
+%in case images are 12-bit instead of the 16-bit TIFF container
+    imshow(Iresize,[],'Parent',handles.axes4);
+tFluo.close();
+
 
 
 
@@ -442,3 +513,7 @@ function editPhaseName_CreateFcn(hObject, eventdata, handles)
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
+
+
+%To make cool movie for iPhone5 (and 16:9) resize images by 4x and collect
+%a 1136 x 640 subsection.
