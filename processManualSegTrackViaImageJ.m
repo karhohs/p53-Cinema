@@ -221,7 +221,7 @@ for i = 1:size(IM,3)
             rhosin=sin(rho);
             mapIndex = map((map(:,i)>0),i)';
             for j=mapIndex
-                k = i - unitOfLife(j).timePoints(1) + 1;
+                k = unitOfLife(j).timePoints == i;
                 %All numbers that describe the ellipse must be rounded in
                 %order to be discretized, i.e. refer to a pixel coordinate
                 if unitOfLife(j).angle(k) == 0 || unitOfLife(j).angle(k) == 180
