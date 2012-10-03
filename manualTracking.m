@@ -63,6 +63,7 @@ handles.timeind = 1;
 fluorchan = get(handles.editFluorescentChannels, 'String'); %assume CSV
 C = textscan(fluorchan, '%s', 'delimiter', ', ', 'MultipleDelimsAsOne', 1);
 handles.fluorescentChannels = C{1};
+handles.renderfig = figure('Visible','off');
 guidata(hObject, handles);
 % UIWAIT makes manualTracking wait for user response (see UIRESUME)
 % uiwait(handles.figure1);
@@ -157,8 +158,10 @@ stackpath = get(handles.editStackPath, 'String');
 fluorchan = get(handles.editFluorescentChannels, 'String'); %assume CSV
 C = textscan(fluorchan, '%s', 'delimiter', ', ', 'MultipleDelimsAsOne', 1);
 handles.fluorescentChannels = C{1};
+phaseratio = str2double(get(handles.editRatio,'String'));
 for i = 1:length(C{1})
-    processManualSegTrackViaImageJ(logpath, stackpath, 'fluorchan', C{1}{i},'phaseratio',4)
+    
+    processManualSegTrackViaImageJ(logpath, stackpath, 'fluorchan', C{1}{i},'phaseratio',phaseratio)
 end
 c = clock;
 set(handles.textStepTwoFinished, 'String', sprintf('Finished! @ %02d:%02d',c(4),c(5)));
@@ -362,7 +365,7 @@ tPhase.setDirectory(handles.timeind);
 I = tPhase.read();
 %in case images are 12-bit instead of the 16-bit TIFF container
 Iresize = imresize(I, [axes2height axes2width]);
-if max(max(I))<4095
+if max(max(I))<=4095
     imshow(Iresize,[],'Parent',handles.axes2);
 else
     imshow(Iresize,'Parent',handles.axes2);
@@ -414,16 +417,19 @@ for k=1:38
                     xellipse(k) = round(x);
                     yellipse(k) = round(y);
 end
-Iobject = figure('Visible','off');
+set(0, 'CurrentFigure', handles.renderfig);
+clf(handles.renderfig);
+
 imshow(I,[]);
 hold on
 for k=1:37
-    line([xellipse(k) xellipse(k+1)],[yellipse(k) yellipse(k+1)],'color','yellow');
+    line([xellipse(k) xellipse(k+1)],[yellipse(k) yellipse(k+1)],'color','yellow','LineWidth',2);
 end
 hold off
-   I2 = getframe;
-
-Iresize = imresize(I2.cdata,2);
+filename = fullfile(get(handles.editLogPath,'String'),'.temprenderfig.tif');
+print(handles.renderfig, '-dtiff', filename);
+I2 = imread(filename,'tiff');
+Iresize = imresize(I2,2);
     imshow(Iresize,'Parent',handles.axes3);
 
 
