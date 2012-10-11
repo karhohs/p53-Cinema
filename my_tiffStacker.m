@@ -96,7 +96,7 @@ mkdir(path2,'p53CinemaSTACKS') %a new directory is generated for the stacks
 %loaded and appendend to a new (multi-layer) tif file named with '_tSTACK'
 
 % ----- Create stacks -----
-timelabels = cell(Tmax,1); %This cell will contain the times images were acquired
+timelabels = cell(size(FileNames)); %This cell will contain the times images were acquired
 newnames = cell(Wmax,Smax);
 for i=1:Wmax
     for j=positions
@@ -124,13 +124,22 @@ for i=1:Wmax
                 newnames{i,j} = Name;
                 t = Tiff(name2read,'r');
                 IM = t.read;
-                timelabels{k} = p53TiffMetaAnalysis4Metamorph(t);
+                timelabels{k,j,i} = p53TiffMetaAnalysis4Metamorph(t);
                 t.close;
                 imwrite(IM,Name,'tif','WriteMode','append','Compression','none');
             end
         end
         t = Tiff(newnames{i,j},'r+');
-        addTime2Stack(timelabels,t);
+        timelabelstemp = timelabels(:,j,i);
+        timelabelslogical = false(size(timelabelstemp));
+        %remove empty cells
+        for k = 1:length(timelabelstemp)
+            if isempty(timelabelstemp{k})
+                timelabelslogical(k) = true;
+            end
+        end
+        timelabelstemp(timelabelslogical) = [];
+        addTime2Stack(timelabelstemp,t);
         t.close;
         fprintf(1,'.'); %shows some activity to calm user... (cheap progress bar)
     end
