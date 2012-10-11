@@ -287,8 +287,13 @@ function pushbuttonLoadData_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 handles.PhaseFilenames = importStackNames(get(handles.editPhasePath,'String'),get(handles.editPhaseName,'String'));
+handles.PhaseFilenamesKey = positiondecypher(handles.PhaseFilenames);
+fluorchan = get(handles.editFluorescentChannels, 'String'); %assume CSV
+C = textscan(fluorchan, '%s', 'delimiter', ', ', 'MultipleDelimsAsOne', 1);
+handles.fluorescentChannels = C{1};
 for i=1:length(handles.fluorescentChannels)
     handles.fluorescentFilenames{i} = importStackNames(get(handles.editStackPath,'String'),handles.fluorescentChannels{i});
+    handles.fluorescentFilenamesKey{i} = positiondecypher(handles.fluorescentFilenames{i});
 end
 datapath = get(handles.editDataPath, 'String');
 load(datapath);
@@ -353,6 +358,9 @@ set(handles.editCurrentCell,'String',num2str(handles.ind));
 set(handles.textNumcell, 'String', sprintf('of %d',handles.numberOfCellsTotal));
 
 function updateImageAxes(handles)
+phasepath = get(handles.editPhasePath,'String');
+logpath = get(handles.editLogPath,'String');
+if exist(phasepath,'dir') && exist(logpath,'dir')
 %1. Show the entire field of view
 axes2width = get(handles.axes2, 'Position');
 axes2height = axes2width(4);
@@ -360,7 +368,7 @@ axes2width = axes2width(3);
 %derive the phase stack number
 positionind = regexp(handles.data(handles.ind).originImageFileName,'_s(\d+)','tokens');
 positionind = str2double(positionind{1});
-tPhase = Tiff(fullfile(get(handles.editPhasePath,'String'),handles.PhaseFilenames{positionind}),'r');
+tPhase = Tiff(fullfile(phasepath,handles.PhaseFilenames{handles.PhaseFilenamesKey(positionind)}),'r');
 tPhase.setDirectory(handles.timeind);
 I = tPhase.read();
 %in case images are 12-bit instead of the 16-bit TIFF container
@@ -374,8 +382,8 @@ tPhase.close();
 %2. Show a close up of the cell (2x)
 %For the moment the window size will not be changable.
 myCentroid = handles.data(handles.ind).manualCentroid(handles.timeind,:); %myCentroid = [row, col] = [y, x]
-xm = myCentroid(2);
-ym = myCentroid(1);
+xm = round(myCentroid(2));
+ym = round(myCentroid(1));
 Iwidth = size(I,2);
 Iheight = size(I,1);
 x1 = xm + 83;
@@ -396,6 +404,10 @@ elseif y2 < 1
     y1 = 128;
     y2 = 1;
 end
+
+%account for y being at the lower left corner and not upper left?
+%y1 = Iheight + 1 - y1;
+%y2 = Iheight + 1 - y2;
 
 I2 = I(y2:y1,x2:x1);
 %add the yellow ellipse
@@ -426,7 +438,7 @@ for k=1:37
     line([xellipse(k) xellipse(k+1)],[yellipse(k) yellipse(k+1)],'color','yellow','LineWidth',2);
 end
 hold off
-filename = fullfile(get(handles.editLogPath,'String'),'.temprenderfig.tif');
+filename = fullfile(logpath,'.temprenderfig.tif');
 print(handles.renderfig, '-dtiff', filename);
 I2 = imread(filename,'tiff');
 Iresize = imresize(I2,2);
@@ -435,7 +447,7 @@ Iresize = imresize(I2,2);
 
 %3. Show a close up of the fluorescent channel
 
-tFluo = Tiff(fullfile(get(handles.editStackPath,'String'),handles.fluorescentFilenames{1}{positionind}),'r');
+tFluo = Tiff(fullfile(get(handles.editStackPath,'String'),handles.fluorescentFilenames{1}{handles.fluorescentFilenamesKey{1}(positionind)}),'r');
 tFluo.setDirectory(handles.timeind);
 I = tFluo.read();
 I3 = I(y2:y1,x2:x1);
@@ -443,7 +455,7 @@ Iresize = imresize(I3,2);
 %in case images are 12-bit instead of the 16-bit TIFF container
     imshow(Iresize,[],'Parent',handles.axes4);
 tFluo.close();
-
+end
 
 
 
@@ -498,6 +510,16 @@ Temp(i:end)=[];
 %     end
 % end
 
+function [out] = positiondecypher(in)
+out = zeros(size(in));
+for i = 1:length(out);
+positionind = regexp(in{i},'_s(\d+)','tokens');
+out(i) = str2double(positionind{1});
+end
+temp = 1:length(out);
+temp = [out;temp]';
+temp = sortrows(temp,1);
+out = temp(:,2);
 
 function editPhaseName_Callback(hObject, eventdata, handles)
 % hObject    handle to editPhaseName (see GCBO)
