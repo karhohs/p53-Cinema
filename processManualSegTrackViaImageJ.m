@@ -222,6 +222,11 @@ for i = 1:size(IM,3)
             mapIndex = map((map(:,i)>0),i)';
             for j=mapIndex
                 k = unitOfLife(j).timePoints == i;
+                if sum(k) > 1
+                    msg = sprintf('\n%s has a problem with the log file entries\n',unitOfLife(j).originImageFileName);
+                    disp(msg);
+                    continue 
+                end
                 %All numbers that describe the ellipse must be rounded in
                 %order to be discretized, i.e. refer to a pixel coordinate
                 if unitOfLife(j).angle(k) == 0 || unitOfLife(j).angle(k) == 180
