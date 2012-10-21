@@ -37,7 +37,6 @@ function [] = MetamorphMDA2PNG(path)
 myConfig = openConfig();
 
 cd([path,'\..']);
-path2=pwd;
 warning('off','MATLAB:tifflib:libraryWarning');
 % ----- Organizing the filenames -----
 %The filenames are organized within a 3D (i,j,k) matrix where each dimension
@@ -59,11 +58,11 @@ for i = 1:length(dirCon)
         FileNames{T(i),S(i),W(i)}=dirCon(i).name; %Cleverly store the file name in a cell
     end
 end
-Tunique = unique(T);
+Tunique = unique(T)';
 Tunique = Tunique(Tunique~=0);
-Sunique = unique(S);
+Sunique = unique(S)';
 Sunique = Sunique(Sunique~=0);
-Wunique = unique(W);
+Wunique = unique(W)';
 Wunique = Wunique(Wunique~=0);
 
 %find the names of the wavelengths
@@ -95,6 +94,103 @@ for i=1:length(Wunique)
 end
 %find the label
 labelText = regexp(dirCon(ind_findwavelength).name,'.+(?=_w)','match','once');
-%create the root directory that will store the PNG images
+%create the root directory that will store the PNG images and metadata
+outpath = myConfig.output_directory.txtd8a{1};
+pngpath = fullfile(outpath,sprintf('%s_png',labelText));
+mkdir(pngpath);
+metadatapath = fullfile(outpath,sprintf('%s_metadata',labelText));
+mkdir(metadatapath);
+
+%make the PNG images and metadata XML files
+for i = Sunique
+    %Create the position directory
+    positionpath = fullfile(pngpath,sprintf('position%d',i));
+    mkdir(positionpath);
+    positionpathmeta = fullfile(metadatapath,sprintf('position%d',i));
+    mkdir(positionpathmeta);
+    for j = Wunique
+        %Create the wavelength directory
+        wavepath = fullfile(positionpath,sprintf('wavelength%d_%s',i,Wnames{j}));
+        mkdir(wavepath);
+        wavepathmeta = fullfile(positionpathmeta,sprintf('wavelength%d_%s',i,Wnames{j}));
+        mkdir(wavepathmeta);
+        for k = Tunique
+            if ~isempty(FileNames{k,i,j}) %FileNames(Time,Position,Channel)
+                %Load the image
+                filename = fullfile(path,FileNames{k,i,j});
+                t = Tiff(filename,'r');
+                %Count how many images are stored in the TIFF file. This is
+                %important because there may be >1 z-slice.
+                numberOfTIFFdir = 1;
+                numberOfTIFFflag = true;
+                while numberOfTIFFflag
+                    if t.lastDirectory
+                        t.setDirectory(1);
+                        numberOfTIFFflag = false;
+                    else
+                        t.nextDirectory;
+                        numberOfTIFFdir = numberOfTIFFdir + 1;
+                    end
+                end
+                for h = 1:numberOfTIFFdir
+                    %Create the PNG
+                    %Load the image
+                    I = t.read;
+                    %Check config file for conversion from 12-bit to 16-bit
+                    if strcmpi(myConfig.MetamorphMDA2PNG.convert12bitTo16bit.attd8a.boolean,'true')
+                        %The Hamamatsu cameras for the closet scope and curtain scope create images
+                        %with 12-bit dynamic range. However, the TIFF format that stores these
+                        %images uses a 16-bit format. Viewing a 12-bit image in a 16-bit format on
+                        %a computer monitor is compromised by the scaling being done at 16-bit. To
+                        %make viewing images from the microscope easier on a computer monitor,
+                        %without any compression or loss of data, the 12-bit data is shifted left
+                        %4-bits to become 16-bit data. In addition, more information is kept following image processing.
+                        numType = class(I);
+                        switch numType
+                            case 'double'
+                                I = uint16(I);
+                                I = bitshift(I,4);
+                                I = double(I);
+                            case 'uint16'
+                                I = bitshift(I,4);
+                        end
+                    end
+                    filenamePNG = fullfile(wavepath,sprintf('%s_s%d_w%d%s_t%d_z%d.png',labelText,i,j,Wnames{j},k,h));
+                    imwrite(I,filenamePNG,'png','bitdepth',16);
+                    %Create the metadatafile
+                    p.filename = fullfile(wavepathmeta,sprintf('%s_s%d_w%d%s_t%d_z%d.xml',labelText,i,j,Wnames{j},k,h));
+                    p.labelText = labelText;
+                    p.zSliceText = num2str(h);
+                    p.positionText = num2str(i);
+                    p.timepointText = num2str(k);
+                    p.wavelengthTypeText = Wnames{j};
+                    %Explore the image description in the TIFF
+                    metadata = t.getTag('ImageDescription');
+                    fid = fopen('t3mp.xml','w');
+                    fprintf(fid,'%s',metadata);
+                    fclose(fid);
+                    xdoc = xmlread('t3mp.xml');
+                    node_root = xdoc.getDocumentElement;
+                    my_list = node_root.getElementsByTagName('prop');
+                    for g=0:my_list.getLength-1
+                        if my_list.item(g).hasAttributes
+                            if strcmp(my_list.item(g).getAttribute('id').toString.toCharArray','acquisition-time-local')
+                                p.timeOfAcquisitionText = my_list.item(g).getAttribute('value').toString.toCharArray';
+                            %elseif strcmp(my_list.item(g).getAttribute('id').toString.toCharArray','acquisition-time-local')
+                            %    
+                            end
+                        end
+                    end
+                    delete('t3mp.xml');
+                    createMetadata(p);
+                    if ~t.lastDirectory
+                        t.nextDirectory;
+                    end
+                end
+                t.close;
+            end
+        end
+    end
+end
 
 disp('cool');
