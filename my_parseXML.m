@@ -111,7 +111,7 @@ if node.hasChildNodes
         current_node = current_node.getNextSibling;
     end
 else
-    my_temp_string = node.getTextContent.toString.toCharArray';
+    my_temp_string = strtrim(node.getTextContent.toString.toCharArray');
     flag = checkString(my_temp_string);
     if flag
         eval([tree '.txtd8a{1}=my_temp_string;'])
@@ -121,7 +121,7 @@ end
 
 % ----- Subfunction PARSEMISCELLANEOUS -----
 function S = parseMiscellaneous(node,S,tree)
-my_temp_string = node.getData.toString.toCharArray';
+my_temp_string = strtrim(node.getData.toString.toCharArray');
 flag = checkString(my_temp_string);
 if flag
     if eval(['isfield(' tree ',''txtd8a'')'])
