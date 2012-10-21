@@ -110,9 +110,9 @@ for i = Sunique
     mkdir(positionpathmeta);
     for j = Wunique
         %Create the wavelength directory
-        wavepath = fullfile(positionpath,sprintf('wavelength%d_%s',i,Wnames{j}));
+        wavepath = fullfile(positionpath,sprintf('wavelength%d_%s',j,Wnames{j}));
         mkdir(wavepath);
-        wavepathmeta = fullfile(positionpathmeta,sprintf('wavelength%d_%s',i,Wnames{j}));
+        wavepathmeta = fullfile(positionpathmeta,sprintf('wavelength%d_%s',j,Wnames{j}));
         mkdir(wavepathmeta);
         for k = Tunique
             if ~isempty(FileNames{k,i,j}) %FileNames(Time,Position,Channel)
