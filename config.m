@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<p53-Cinema_config att1="1" att2="2" att3="hi">
+<p53Cinema_config att1="1" att2="2" att3="hi">
 <!-- This is a configuration file -->
 aaaaaaa
 <path_to_metamorph_images>
@@ -42,4 +42,10 @@ eeeeee
     <label></label>
     <exposure units="ms"></exposure>
 </wavelength>
-</p53-Cinema_config>
+<MetamorphMDA2PNG>
+    <convert12bitTo16bit boolean="true"></convert12bitTo16bit>
+</MetamorphMDA2PNG>
+<output_directory>
+    G:\KWKDocuments\MATLAB\p53CinemaOutput
+</output_directory>
+</p53Cinema_config>
