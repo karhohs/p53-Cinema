@@ -5,8 +5,8 @@ function [] = p53LightsCameraAction(centroid)
 %Assumption #2: the output format is .mp4
 
 %Where are the source images for the movie?
-pathbf = 'G:\KWKDocuments\MATLAB\p53CinemaOutput\20120818_png\position10\wavelength10_Brightfield';
-pathyfp = 'G:\KWKDocuments\MATLAB\p53CinemaOutput\20120818_png\position10\wavelength10_YFP';
+pathbf = 'G:\KWKDocuments\MATLAB\p53CinemaOutput\20120818_png\position1\wavelength1_Brightfield';
+pathyfp = 'G:\KWKDocuments\MATLAB\p53CinemaOutput\20120818_png\position1\wavelength1_YFP';
 pathout = 'G:\KWKDocuments\MATLAB\p53CinemaOutput';
 %What is the size of the desired output?
 widthOut = 1136; %iPhone5
@@ -68,14 +68,14 @@ for i=1:length(xsmooth)
 end
 
 %find the list of images to be used to make this movie
-filenamebfproto = '20120818_s10_w1Brightfield_t1_z1.png';
-filenameyfpproto = '20120818_s10_w2YFP_t1_z1.png';
+filenamebfproto = '20120818_s1_w1Brightfield_t1_z1.png';
+filenameyfpproto = '20120818_s1_w2YFP_t1_z1.png';
 lenxout = length(xout)*4-3;
 indx = 1:4:lenxout;
-bfObj = VideoWriter(fullfile(pathout,'s10_cell3_bf.mp4'),'MPEG-4');
+bfObj = VideoWriter(fullfile(pathout,'s1_cell8_bf.mp4'),'MPEG-4');
 bfObj.FrameRate = 15;
 open(bfObj);
-yfpObj = VideoWriter(fullfile(pathout,'s10_cell3_yfp.mp4'),'MPEG-4');
+yfpObj = VideoWriter(fullfile(pathout,'s1_cell8_yfp.mp4'),'MPEG-4');
 yfpObj.FrameRate = 15;
 open(yfpObj);
 
