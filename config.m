@@ -45,7 +45,10 @@ eeeeee
 <MetamorphMDA2PNG>
     <convert12bitTo16bit boolean="true"></convert12bitTo16bit>
 </MetamorphMDA2PNG>
+<MetamorphSlideScan2PNG>
+    <convert12bitTo16bit boolean="true"></convert12bitTo16bit>
+</MetamorphSlideScan2PNG>
 <output_directory>
-    G:\KWKDocuments\MATLAB\p53CinemaOutput
+    N:\LAHAV LAB\Kyle\Still_Images\SI_201211B\A549\0h-out
 </output_directory>
 </p53Cinema_config>
