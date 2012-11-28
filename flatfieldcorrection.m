@@ -13,73 +13,30 @@ function []=flatfieldcorrection(stackpath,ffpath,varargin)
 %
 %
 % Other Notes:
-% It is assumed that the bit depth of the source images are 12-bit.
+% Assumes the image files have been converted to the p53Cinema PNG format
 p = inputParser;
 p.addRequired('stackpath', @(x)ischar(x));
 p.addRequired('ffpath', @(x)ischar(x));
-p.addParamValue('scanslide', '', @(x)iscellstr(x));
 p.parse(stackpath,ffpath, varargin{:});
 
-if isempty(p.Results.scanslide)
-    %----- Import stacknames -----
-    disp(['working in ', stackpath]); %Sanity Check
-    dirCon_stack = dir(stackpath);
-    stacknames=importStackNames(dirCon_stack);
-    stacknames2=stacknames;
-    %This is part of a bug. This file expects the input filename to be of a
-    %certain format. The following for-loop partially ensures the file names
-    %are in that format.
-    for i=1:length(stacknames)
-        Name_temp = regexprep(stacknames(i),'\s',''); %Remove all not(alphabetic, numeric, or underscore) characters
-        Name_temp = regexprep(Name_temp,'tocamera','','ignorecase'); %remove 'tocamera' if present b/c it is not informative
-        Name_temp = regexprep(Name_temp,'camera','','ignorecase'); %remove 'camera' if present b/c it is not informative
-        stacknames2(i) = Name_temp;
-    end
-    %identify the channels
-    expr='(?<=_w\d+).*(?=_s\d+)';
-    Temp=cell([1,length(stacknames)]); %Initialize cell array
-    i=1;
-    for j=1:length(stacknames2)
-        Temp2=regexp(stacknames2{j},expr,'match','once','ignorecase');
-        if Temp2
-            Temp{i}=Temp2;
-            i=i+1;
-        end
-    end
-    Temp(i:end)=[];
-    channels_stacks = unique(Temp); %The different channels are saved
+%----- Import PNG paths -----
+%Check whether the computer is a mac
+if ismac
+    error('ffcor:notApc','Flatfield correction is currently configured to run on a pc');
+    %[~,filepaths]=system('ls -Rp */*.png');
+elseif ispc
+    %the 'dir' command in Matlab does not search subfolders. However,
+    %there is a MS-DOS command that will do the trick!
+    %'/B' uses bare format (no heading information or summary)
+    %'/S' displays files in specified directory and all subdirectories
+    [~,filepaths] = system('dir /S /B *.png');
+    filepaths = textscan(filepaths,'%s');
+    filepaths = filepaths{1};
 else
-    %----- Metamorph saves images from scanslide differently from multidimensional acquisition. This is annoying.
-    %The 'scanslide' cell array should contain fluorescent channel names in
-    %the same numerical order in which they were taken.
-    channels_stacks = p.Results.scanslide; %The different channels are saved
-    %----- Import stacknames -----
-    disp(['working in ', stackpath]); %Sanity Check
-    dirCon_stack = dir(stackpath);
-    stacknames=importStackNames(dirCon_stack);
-    stacknames2=stacknames;
-    %Add the channel name to the stackname
-    expr='(?<=_w)\d+(?=_s\d+)';
-    for j=1:length(stacknames2)
-        Temp=regexp(stacknames2{j},expr,'match','once','ignorecase');
-        if Temp
-            tempstr1 = regexp(stacknames2{j},'.*(?=_s\d+)','match','once','ignorecase');
-            tempstr2 = regexp(stacknames2{j},'(?<=_w\d+).*','match','once','ignorecase');
-            stacknames2{j} = [tempstr1 channels_stacks{str2double(Temp)} tempstr2];
-        end
-    end
-    %For every channel in scanslide there is assumed to be a birds-eye-view
-    %image that is saved as the last stage position for every channel.
-    %Prevent these images from being corrected.
-    lastStagePositionNumber = length(stacknames)/length(channels_stacks);
-    for i = length(stacknames):-1:1
-        temp=regexp(stacknames{i},['(?<=_s)' num2str(lastStagePositionNumber)],'match','once');
-        if temp
-            stacknames(i) = [];
-            stacknames2(i) = [];
-        end
-    end
+    error('ffcor:notApc','Flatfield correction is currently configured to run on a pc');
 end
+disp(['working in ', stackpath]); %Sanity Check
+
 %import directory of flatfield images
 disp(['working in ', ffpath]); %Sanity Check
 dirCon_ff = dir(ffpath);
@@ -96,29 +53,17 @@ for j=1:length(dirCon_ff)
     end
 end
 Temp(i:end)=[];
-channels_ff = unique(Temp); %The different channels are saved
-for i=length(channels_stacks):-1:1
-    flag = true;
-    for j=length(channels_ff):-1:1
-        if strcmp(channels_stacks{i},channels_ff{j})
-            flag = false;
-            break
-        end
-    end
-    if flag
-        channels_stacks(i) = [];
-    end
-end
+channels_stacks = unique(Temp); %The different channels are saved
+
 if isempty(channels_stacks)
     error('fltfldcrct:noFF','There are no matching flatfield images.')
 end
 %----- Create a new folder to hold corrected images -----
-tempfoldername=regexp(stackpath,'(?<=\\)[\w ]*','match'); %Prepare to create a new folder to place background subtracted stacks
-tempfoldername=[tempfoldername{end},'_ff'];
-ffstackpath=[stackpath,'\..\',tempfoldername];
+foldernameIN=regexp(stackpath,'(?<=\\)[\w ]*','match'); %Prepare to create a new folder to place background subtracted stacks
+foldernameIN = foldernameIN{end};
+foldernameOUT=[foldernameIN,'_ff'];
+ffstackpath=regexprep(stackpath,foldernameIN,foldernameOUT);
 mkdir(ffstackpath);
-cd(ffstackpath)
-ffstackpath=pwd;
 
 %Create channelTruthTable variable. The channelTruthTable variable is two
 %columns with a row for each channel. The first column is the offset
@@ -169,6 +114,7 @@ dirCon_ff = dir(ffpath);
 for j=1:length(channels_stacks)
     info = imfinfo([ffpath,'\',channels_stacks{j},'_offset'],'tif');
     offset = double(imread([ffpath,'\',channels_stacks{j},'_offset'],'tif','Info',info));
+    offset = scale12to16bit(offset);
     for k=1:length(dirCon_ff)
         temp = regexp(dirCon_ff(k).name,[channels_stacks{j} '_gain\d+'],'match','once','ignorecase');
         if ~isempty(temp)
@@ -182,76 +128,37 @@ for j=1:length(channels_stacks)
     max_temp=regexp(gainname,expr,'match','once');
     max_temp=str2double(max_temp)/1000;
     gain=gain*max_temp/65536;
-    for i=1:length(stacknames)
-        temp = regexp(stacknames2{i},channels_stacks{j},'match','once');
+    
+    for i=1:length(filepaths)
+        [~,pngname,~] = fileparts(filepaths{i});
+        temp = regexp(pngname,channels_stacks{j},'match','once','ignorecase');
         if ~isempty(temp)
-            disp(['Flatfield correcting ',stacknames{i}])
-            info = imfinfo([stackpath,'\',stacknames{i}],'tif');
-            warning('off','MATLAB:tifflib:libraryWarning');
-            t = Tiff([stackpath,'\',stacknames{i}],'r');
-            Name = regexprep(stacknames2{i},'(?<=_t)(\w*)(?=\.)','$1_ff');
-            if length(info) > 1
-                for k=1:length(info)-1
-                    IM = double(t.read);
-                    IM = IM-offset;
-                    IM(IM<0) = 0;
-                    IM = scale12to16bit(IM);
-                    IM = IM./gain;
-                    IM = uint16(IM);
-                    imwrite(IM,[ffstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
-                    t.nextDirectory;
-                end
-                %one last time without t.nextDirectory
-                IM = double(t.read);
-                IM = IM-offset;
-                IM(IM<0) = 0;
-                IM = scale12to16bit(IM);
-                IM = IM./gain;
-                IM = uint16(IM);
-                imwrite(IM,[ffstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
-            else
-                IM = double(t.read);
-                IM = IM-offset;
-                IM(IM<0) = 0;
-                IM = scale12to16bit(IM);
-                IM = IM./gain;
-                IM = uint16(IM);
-                imwrite(IM,[ffstackpath,'\',Name],'tif','WriteMode','append','Compression','none');
+            disp(['Flatfield correcting ',filepaths{i}])
+            IM = double(imread(filepaths{i}));
+            Name = regexprep(filepaths{i},foldernameIN,foldernameOUT);
+            [pngpath,~,~] = fileparts(Name);
+            %verify that the input image is the correct size, otherwise no
+            %output image will be created.
+            if size(IM)~=size(offset)
+                continue
             end
-            %add image description from old stack to new stack
-            t.setDirectory(1)
-            metadata = t.getTag('ImageDescription');
-            t.close;
-            t = Tiff([ffstackpath,'\',Name],'r+');
-            t.setTag('ImageDescription',metadata);
-            t.rewriteDirectory;
-            t.close;
+            IM = IM-offset;
+            IM(IM<0) = 0;
+            IM = IM./gain;
+            IM = uint16(IM);
+            %check for the existence of the folder where the new image will be placed.
+            if ~isdir(pngpath)
+                mkdir(pngpath);
+            end
+            %Create the PNG
+            imwrite(IM,Name,'png','bitdepth',16);
         end
+        %update metadata?
+        %stage-label, stage-position-x, stage-position-y
+        
     end
 end
 signalCompletionWithSound();
-end
-
-%----- SUBFUNCTION IMPORTSTACKNAMES -----
-function [Temp] = importStackNames(dirCon_stack)
-expr='.*_w\d+.*_s\d+.*_t.*\.tif';
-Temp=cell([1,length(dirCon_stack)]); %Initialize cell array
-% ----- Identify the legitimate stacks -----
-i=1;
-for j=1:length(dirCon_stack)
-    Temp2=regexp(dirCon_stack(j).name,expr,'match','once','ignorecase');
-    if Temp2
-        Temp{i}=Temp2;
-        i=i+1;
-    end
-end
-% ----- Remove empty cells -----
-Temp(i:end)=[];
-% for j=length(Temp):-1:1
-%     if isempty(Temp{j})
-%         Temp(j)=[];
-%     end
-% end
 end
 
 %----- SUBFUNCTION LEASTSQUARESFIT -----
