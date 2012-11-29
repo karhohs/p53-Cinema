@@ -29,6 +29,7 @@ elseif ispc
     %there is a MS-DOS command that will do the trick!
     %'/B' uses bare format (no heading information or summary)
     %'/S' displays files in specified directory and all subdirectories
+    cd(stackpath)
     [~,filepaths] = system('dir /S /B *.png');
     filepaths = textscan(filepaths,'%s');
     filepaths = filepaths{1};
