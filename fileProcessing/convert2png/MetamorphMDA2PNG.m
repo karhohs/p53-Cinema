@@ -136,25 +136,24 @@ for i = Sunique
                     %Create the PNG
                     %Load the image
                     I = t.read;
-                    %Check config file for conversion from 12-bit to 16-bit
-                    if strcmpi(myConfig.MetamorphMDA2PNG.convert12bitTo16bit.attd8a.boolean,'true')
-                        %The Hamamatsu cameras for the closet scope and curtain scope create images
-                        %with 12-bit dynamic range. However, the TIFF format that stores these
-                        %images uses a 16-bit format. Viewing a 12-bit image in a 16-bit format on
-                        %a computer monitor is compromised by the scaling being done at 16-bit. To
-                        %make viewing images from the microscope easier on a computer monitor,
-                        %without any compression or loss of data, the 12-bit data is shifted left
-                        %4-bits to become 16-bit data. In addition, more information is kept following image processing.
-                        numType = class(I);
-                        switch numType
-                            case 'double'
-                                I = uint16(I);
-                                I = bitshift(I,4);
-                                I = double(I);
-                            case 'uint16'
-                                I = bitshift(I,4);
-                        end
+                    
+                    %The Hamamatsu cameras for the closet scope and curtain scope create images
+                    %with 12-bit dynamic range. However, the TIFF format that stores these
+                    %images uses a 16-bit format. Viewing a 12-bit image in a 16-bit format on
+                    %a computer monitor is compromised by the scaling being done at 16-bit. To
+                    %make viewing images from the microscope easier on a computer monitor,
+                    %without any compression or loss of data, the 12-bit data is shifted left
+                    %4-bits to become 16-bit data. In addition, more information is kept following image processing.
+                    numType = class(I);
+                    switch numType
+                        case 'double'
+                            I = uint16(I);
+                            I = bitshift(I,4);
+                            I = double(I);
+                        case 'uint16'
+                            I = bitshift(I,4);
                     end
+                    
                     filenamePNG = fullfile(wavepath,sprintf('%s_s%d_w%d%s_t%d_z%d.png',labelText,i,j,Wnames{j},k,h));
                     imwrite(I,filenamePNG,'png','bitdepth',16);
                     %Create the metadatafile
@@ -176,8 +175,12 @@ for i = Sunique
                         if my_list.item(g).hasAttributes
                             if strcmp(my_list.item(g).getAttribute('id').toString.toCharArray','acquisition-time-local')
                                 p.timeOfAcquisitionText = my_list.item(g).getAttribute('value').toString.toCharArray';
-                            %elseif strcmp(my_list.item(g).getAttribute('id').toString.toCharArray','acquisition-time-local')
-                            %    
+                            elseif strcmp(my_list.item(g).getAttribute('id').toString.toCharArray','stage-label')
+                                p.stageLabelText = my_list.item(g).getAttribute('value').toString.toCharArray';
+                            elseif strcmp(my_list.item(g).getAttribute('id').toString.toCharArray','stage-position-x')
+                                p.stagePositionXText = my_list.item(g).getAttribute('value').toString.toCharArray';
+                            elseif strcmp(my_list.item(g).getAttribute('id').toString.toCharArray','stage-position-y')
+                                p.stagePositionYText = my_list.item(g).getAttribute('value').toString.toCharArray';
                             end
                         end
                     end
@@ -192,5 +195,3 @@ for i = Sunique
         end
     end
 end
-
-disp('cool');
