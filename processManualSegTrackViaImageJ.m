@@ -66,6 +66,7 @@ unitOfLife = struct('timePoints', {}, ...
     'meanIntensityHeader', {}, ...
     'parent', {}, ...
     'nuclearSolidity', {}, ...
+    'divisionbool', {}, ...
     'divisionTime', {}, ...
     'manualCentroid', {}, ...
     'major', {}, ...
@@ -74,6 +75,7 @@ unitOfLife = struct('timePoints', {}, ...
     'centroid', {}, ...
     'velocity', {}, ...
     'uid', {}, ...
+    'label', {}, ...
     'originImageDirectory', {});
 unitOfLife(numberOfCells).timePoints = []; %initialize the struct
 
@@ -88,12 +90,19 @@ dirConLogsArray = 1:length(dirConLogs);
 parent_ind = strcmpi('parent',log_txt);
 start_ind = strcmpi('start',log_txt);
 end_ind = strcmpi('end',log_txt);
+div_ind = strcmpi('division',log_txt);
+div_all = num2cell(log_num(:,div_ind));
 strtandend = cell(1,numberOfCells);
+label_all = cell(1,numberOfCells);
 for i =1:numberOfCells
     strtandend{i} = [log_num(i,start_ind) log_num(i,end_ind)];
+    label_all{i} = [pos_all(i); uol_all(i)];
 end
 [unitOfLife(:).divisionTime] = deal(strtandend{:});
-[unitOfLife(:).parent] = deal(log_num(:,parent_ind)');
+[unitOfLife(:).label] = deal(label_all{:});
+parent_all = num2cell(log_num(:,parent_ind));
+[unitOfLife(:).parent] = deal(parent_all{:});
+[unitOfLife(:).divisionbool] = deal(div_all{:});
 for j=1:numberOfCells
     %find the text file holding the segmentation and tracking info
     pos = pos_all(j);
@@ -223,6 +232,7 @@ for i=1:numberOfPositions
 end
 filename = sprintf('dynamics%s',p.Results.fluorchan);
 save(fullfile(logpath,filename),'unitOfLife');
+linkedUOL = linktogetherUOL(unitOfLife);
 disp('cool')
 
 function [unitOfLife]=distillDataFromMovie(map,unitOfLife,method,IM,tind)
@@ -277,4 +287,37 @@ switch lower(method)
     case 'watershed'
     otherwise
         error('unknown segmentation method input into getMovieMeasurements.m')
+end
+
+function [linkedUOL] = linktogetherUOL(unitOfLife)
+%% Connect together the cells
+linkmap = cell(1,length(unitOfLife));
+parent_all = [unitOfLife(:).parent];
+poslabel_all = [unitOfLife(:).label(1)];
+div_all = [unitOfLife(:).divisionbool];
+linkcounter = 1;
+cellpointer = 1;
+counter = 1;
+while linkcounter <= length(unitOfLife)
+        
+end
+
+function [linkmap, parent_all, counter] = recursivelink()
+if div_all(cellpointer) == 1
+    
+    temp1 = parent_all == poslabel_all(2,cellpointer);
+    temp2 = poslabel_all(1,:) == poslabel_all(1,cellpointer);
+    temp3 = temp1 && temp2;
+    if sum(temp3 == 0)
+        counter = counter + 1;
+    else
+        linkmap{counter}(end+1) = cellpointer;
+        cellpointer = find(temp3,'first');
+        parent_all(cellpointer) = 0;
+        recursivelink
+    end
+else
+    linkmap{linkcounter}(end+1) = cellpointer;
+    linkcounter = linkcounter + 1;
+    cellpointer = counter;
 end
