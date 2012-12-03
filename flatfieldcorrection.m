@@ -155,7 +155,6 @@ for j=1:length(channels_stacks)
             imwrite(IM,Name,'png','bitdepth',16);
         end
         %update metadata?
-        %stage-label, stage-position-x, stage-position-y
         
     end
 end
