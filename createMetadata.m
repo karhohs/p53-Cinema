@@ -30,5 +30,17 @@ metadata.appendChild(zSlice);
 label = docNode.createElement('label');
 label.appendChild(docNode.createTextNode(p.labelText));
 metadata.appendChild(label);
+%stage-label
+stageLabel = docNode.createElement('stage-label');
+stageLabel.appendChild(docNode.createTextNode(p.stageLabelText));
+metadata.appendChild(stageLabel);
+%stage-position-x
+stagePositionX = docNode.createElement('stage-position-x');
+stagePositionX.appendChild(docNode.createTextNode(p.stagePositionXText));
+metadata.appendChild(stagePositionX);
+%stage-position-y
+stagePositionY = docNode.createElement('stage-position-y');
+stagePositionY.appendChild(docNode.createTextNode(p.stagePositionYText));
+metadata.appendChild(stagePositionY);
 %write to a file
 xmlwrite(p.filename,docNode);
