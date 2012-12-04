@@ -232,7 +232,82 @@ for i=1:numberOfPositions
 end
 filename = sprintf('dynamics%s',p.Results.fluorchan);
 save(fullfile(logpath,filename),'unitOfLife');
-linkedUOL = linktogetherUOL(unitOfLife);
+%% link the cell segments together
+linkmap = cell(1,length(unitOfLife));
+parent_all = [unitOfLife(:).parent];
+poslabel_all = [unitOfLife(:).label];
+div_all = [unitOfLife(:).divisionbool];
+rootnodepointer = 1;
+linkcounter = 1;
+currentbranch = [];
+childremovedflag = false;
+%find all the root nodes
+rootnodes = parent_all == 0;
+rootnodes = find(rootnodes);
+realrootnodeslength = length(rootnodes);
+rootnodes(end+1) = 0;
+cellpointer = rootnodes(rootnodepointer);
+while rootnodepointer <= realrootnodeslength
+    currentbranch(end + 1) = cellpointer; %#ok<AGROW>
+    if div_all(cellpointer) == true
+        %Where are the child nodes
+        posid = poslabel_all(1,cellpointer);
+        cellid = poslabel_all(2,cellpointer);
+        temp1 = poslabel_all(1,:)==posid;
+        temp2 = parent_all==cellid;
+        temp3 = temp1 & temp2;
+        if any(temp3)
+            cellpointer = find(temp3,1,'first');
+        else
+            if childremovedflag
+                if any(rootnodes == cellpointer)
+                    rootnodepointer = rootnodepointer + 1;
+                    cellpointer = rootnodes(rootnodepointer);
+                    currentbranch = [];
+                    childremovedflag = false;
+                else
+                    parent_all(cellpointer) = 0;
+                    currentbranch(end) = [];
+                    cellpointer = currentbranch(end);
+                    currentbranch(end) = [];
+                end
+            else
+                if any(rootnodes == cellpointer)
+                    linkmap{linkcounter} = currentbranch;
+                    linkcounter = linkcounter + 1;
+                    rootnodepointer = rootnodepointer + 1;
+                    cellpointer = rootnodes(rootnodepointer);
+                    currentbranch = [];
+                else
+                    linkmap{linkcounter} = currentbranch;
+                    linkcounter = linkcounter + 1;
+                    parent_all(cellpointer) = 0;
+                    currentbranch(end) = [];
+                    cellpointer = currentbranch(end);
+                    currentbranch(end) = [];
+                    childremovedflag = true;
+                end
+            end
+        end
+    else
+        if any(rootnodes == cellpointer)
+            linkmap{linkcounter} = currentbranch;
+            linkcounter = linkcounter + 1;
+            rootnodepointer = rootnodepointer + 1;
+            cellpointer = rootnodes(rootnodepointer);
+            currentbranch = [];
+        else
+            linkmap{linkcounter} = currentbranch;
+            linkcounter = linkcounter + 1;
+            parent_all(cellpointer) = 0;
+            currentbranch(end) = [];
+            cellpointer = currentbranch(end);
+            currentbranch(end) = [];
+            childremovedflag = true;
+        end
+    end
+end
+linkmap(linkcounter:end) = [];
 disp('cool')
 
 function [unitOfLife]=distillDataFromMovie(map,unitOfLife,method,IM,tind)
@@ -287,37 +362,4 @@ switch lower(method)
     case 'watershed'
     otherwise
         error('unknown segmentation method input into getMovieMeasurements.m')
-end
-
-function [linkedUOL] = linktogetherUOL(unitOfLife)
-%% Connect together the cells
-linkmap = cell(1,length(unitOfLife));
-parent_all = [unitOfLife(:).parent];
-poslabel_all = [unitOfLife(:).label(1)];
-div_all = [unitOfLife(:).divisionbool];
-linkcounter = 1;
-cellpointer = 1;
-counter = 1;
-while linkcounter <= length(unitOfLife)
-        
-end
-
-function [linkmap, parent_all, counter] = recursivelink()
-if div_all(cellpointer) == 1
-    
-    temp1 = parent_all == poslabel_all(2,cellpointer);
-    temp2 = poslabel_all(1,:) == poslabel_all(1,cellpointer);
-    temp3 = temp1 && temp2;
-    if sum(temp3 == 0)
-        counter = counter + 1;
-    else
-        linkmap{counter}(end+1) = cellpointer;
-        cellpointer = find(temp3,'first');
-        parent_all(cellpointer) = 0;
-        recursivelink
-    end
-else
-    linkmap{linkcounter}(end+1) = cellpointer;
-    linkcounter = linkcounter + 1;
-    cellpointer = counter;
 end
