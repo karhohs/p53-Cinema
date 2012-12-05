@@ -308,6 +308,54 @@ while rootnodepointer <= realrootnodeslength
     end
 end
 linkmap(linkcounter:end) = [];
+
+%The cell segments have been linked together into a chain, now I want to
+%identify only a single chain for each root node. I will select the first
+%chain for each root node.
+uniqueRootNodeLinkmap = cell(realrootnodeslength,1);
+for i=1:realrootnodeslength
+    for j=1:length(linkmap)
+        if linkmap{j}(1)==rootnodes(i)
+            uniqueRootNodeLinkmap{i} = linkmap{j};
+            break
+        end
+    end
+end
+%Now I will pull the data out of the unitOfLife structure
+uniqueUOL = struct('timePoints', {}, ...
+    'linkmap', {}, ...
+    'divisionbool', {}, ...
+    'divisionTime', {}, ...
+        'meanIntensity', {});
+uniqueUOL(realrootnodeslength).timePoints = []; %initialize the struct
+
+for i=1:realrootnodeslength
+    uniqueUOL(i).linkmap = uniqueRootNodeLinkmap{i};
+    for j=uniqueRootNodeLinkmap{i}
+        uniqueUOL(i).timePoints = cat(2,uniqueUOL(i).timePoints,unitOfLife(j).timePoints2);
+        uniqueUOL(i).meanIntensity = cat(2,uniqueUOL(i).meanIntensity,unitOfLife(j).meanIntensity);
+        uniqueUOL(i).divisionbool = cat(2,uniqueUOL(i).divisionbool,unitOfLife(j).divisionbool);
+        uniqueUOL(i).divisionTime = cat(2,uniqueUOL(i).divisionTime,unitOfLife(j).divisionTime);
+    end
+end
+
+%smooth the traces.
+for i=1:realrootnodeslength
+    uniqueUOL(i).meanIntensity = smooth(uniqueUOL(i).meanIntensity,5);
+end
+
+%estimate the background from the minimum of the traces...
+backgroundmatrix = zeros(realrootnodeslength,865);
+for i=1:realrootnodeslength
+backgroundmatrix(i,uniqueUOL(i).timePoints) = uniqueUOL(i).meanIntensity;
+end
+backgroundmatrix(backgroundmatrix==0)=inf;
+minmatrix = min(backgroundmatrix);
+minmatrix = minmatrix(1:4:865);
+figure
+plot(minmatrix)
+
+save(fullfile(logpath,'kewl'),'uniqueUOL');
 disp('cool')
 
 function [unitOfLife]=distillDataFromMovie(map,unitOfLife,method,IM,tind)
