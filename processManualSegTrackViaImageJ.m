@@ -15,13 +15,34 @@ function [] = processManualSegTrackViaImageJ(logpath,stackpath,varargin)
 % included in addition to any others: "Center of Mass", "Fit Ellipse", and
 % "Stack Position".
 p = inputParser;
-p.addRequired('logpath', @(x)ischar(x));
-p.addRequired('stackpath', @(x)ischar(x));
+p.addRequired('logpath', @(x)isdir(x));
+p.addRequired('stackpath', @(x)isdir(x));
 p.addParamValue('fluorchan','YFP',@(x)ischar(x));
 p.addParamValue('method','ellipse',@(x)ischar(x));
-p.addParamValue('phaseratio',1,@(x)isnumeric(x));
+p.addParamValue('bkgd','',@(x)isdir(x));
 p.parse(logpath, stackpath, varargin{:});
+[log_txt,log_num,numberOfCells,dirConLogs] = loadImageJLogFiles(logpath,''); %import the manual segmentation data collected via imageJ
+unitOfLife = initializeUnitOfLife(numberOfCells);
+[pos_all,pos_unique,unitOfLife] = populateUOLwithManualTrackingData(unitOfLife,log_txt,log_num,dirConLogs,numberOfCells,logpath); %populate a struct variable that will be used to house the data that will be collected and manipulated in this file.
+[unitOfLife] = dataExtraction(unitOfLife, stackpath, numberOfCells, pos_unique,p,pos_all); %Use the segmentation data to extract data from the fluorescent images.
+%filename = sprintf('dynamics%s',p.Results.fluorchan);
+%save(fullfile(logpath,filename),'unitOfLife');
+if ~isempty(p.Results.bkgd) %(OPTIONAL) Estimate the background using traces of empty space or background.
+    [log_txt_bkgd,log_num_bkgd,numberOfCells_bkgd,dirConLogs_bkgd] = loadImageJLogFiles(p.Results.bkgd,'bkgd.xlsx'); %import the manual segmentation data collected via imageJ
+    unitOfLife_bkgd = initializeUnitOfLife(numberOfCells_bkgd);
+    [pos_all_bkgd,pos_unique_bkgd,unitOfLife_bkgd] = populateUOLwithManualTrackingData(unitOfLife_bkgd,log_txt_bkgd,log_num_bkgd,dirConLogs_bkgd,numberOfCells_bkgd,p.Results.bkgd); %populate a struct variable that will be used to house the data that will be collected and manipulated in this file.
+    unitOfLife_bkgd = dataExtraction(unitOfLife_bkgd, stackpath, numberOfCells_bkgd, pos_unique_bkgd,p,pos_all_bkgd); %Use the segmentation data to extract data from the fluorescent images.
+    %calculate the background...
+    [bkgdTrace,bkgdTimepoints] = calculateBackground(unitOfLife_bkgd);
+    %subtract the background...
+    unitOfLife = subtractBackground(unitOfLife,bkgdTrace,bkgdTimepoints);
+end
+[linkmap,uniqueUOL] = findLinkMap(unitOfLife); %Connect the cell segments and output a unique representative cell from each cell genealogy.
+%smooth the signal
+uniqueUOL = smoothenedsignal(uniqueUOL);
+end
 
+function [log_txt,log_num,numberOfCells,dirConLogs] = loadImageJLogFiles(logpath,logFile)
 %% ----- Load divisions file -----
 if ~isdir(logpath)
     error('manSeg:logpathNotDir','The string input for logpath is not a directory.\nPlease input the directory path, not the path to a specific file.');
@@ -29,17 +50,21 @@ end
 
 %first, find the divisions file.
 dirConLogs = dir(logpath);
-temp = false;
-for i=1:length(dirConLogs)
-    [logFile, tok] = regexpi(dirConLogs(i).name,'divisions\.(\w+)','match','tokens','once');
-    if ~isempty(logFile)
-        temp = true;
-        break
+if isempty(logFile) %if logFile is empty then assume divisions...
+    temp = false;
+    for i=1:length(dirConLogs)
+        [logFile, tok] = regexpi(dirConLogs(i).name,'divisions\.(\w+)','match','tokens','once');
+        if ~isempty(logFile)
+            temp = true;
+            break
+        end
     end
-end
-if temp == false %does the division file exist
-    disp(logpath)
-    error('manSeg:noDiv','The %s directory does not contain a divisions file. \nPlease make sure the file is spelled with an "s".',logpath);
+    if temp == false %does the division file exist
+        disp(logpath)
+        error('manSeg:noDiv','The %s directory does not contain a divisions file. \nPlease make sure the file is spelled with an "s".',logpath);
+    end
+else
+    [~, tok] = regexpi(logFile,'.+\.(\w+)','match','tokens','once');
 end
 %second, check if it is MS xlsx OR just plain .txt
 switch tok{1}
@@ -55,6 +80,10 @@ end
 %How many cell tracks are there?
 numberOfCells = size(log_num,1);
 
+
+end
+
+function [unitOfLife] = initializeUnitOfLife(numberOfCells)
 %% Initialize the struct that holds all the cellular information
 unitOfLife = struct('timePoints', {}, ...
     'timePoints2', {}, ...
@@ -78,7 +107,9 @@ unitOfLife = struct('timePoints', {}, ...
     'label', {}, ...
     'originImageDirectory', {});
 unitOfLife(numberOfCells).timePoints = []; %initialize the struct
+end
 
+function [pos_all,pos_unique,unitOfLife] = populateUOLwithManualTrackingData(unitOfLife,log_txt,log_num,dirConLogs,numberOfCells,logpath)
 %% ----- Import all of the pertinent manual segmentation and tracking
 %information from a folder of text files into the unitOfLife struct. -----
 pos_ind = strcmpi('position',log_txt);
@@ -158,21 +189,14 @@ for j=1:numberOfCells
             unitOfLife(j).minor = manualData.data(:,index(4));
             unitOfLife(j).angle = manualData.data(:,index(5));
             unitOfLife(j).timePoints = manualData.data(:,index(6));
-            %adjust the timepoints, derived from the phase image, to match the number of timepoints found in the fluorescent images. For example, the phase images might be capture every 5 minutes, whereas the fluorescent images every 20 minutes.
-            timePointsTemp = (unitOfLife(j).timePoints + p.Results.phaseratio - 1)/p.Results.phaseratio;
-            timePointsLogical = mod(timePointsTemp,1)==0;
-            timePointsTemp = timePointsTemp(timePointsLogical);
-            unitOfLife(j).timePoints = timePointsTemp;
-            unitOfLife(j).manualCentroid = unitOfLife(j).manualCentroid(timePointsLogical,:);
-            unitOfLife(j).major = unitOfLife(j).major(timePointsLogical);
-            unitOfLife(j).minor = unitOfLife(j).minor(timePointsLogical);
-            unitOfLife(j).angle = unitOfLife(j).angle(timePointsLogical);
             dirConLogsArray(counter) = []; %Don't look at the same text file more than once
             break
         end
     end
 end
+end
 
+function [unitOfLife] = dataExtraction(unitOfLife, stackpath, numberOfCells, pos_unique,p,pos_all)
 %% ----- Import PNG paths -----
 %Check whether the computer is a mac
 if ismac
@@ -222,6 +246,8 @@ for i=1:numberOfPositions
             filepaths4posi{str2double(tok{1}{3})} = filepaths{j};
         end
     end
+    str = sprintf('position %d',pos_unique(i));
+    disp(str);
     for j=1:numberOfTimepoints
         %extract data using the ellipse method
         if ~isempty(filepaths4posi{j})
@@ -230,8 +256,63 @@ for i=1:numberOfPositions
         end
     end
 end
-filename = sprintf('dynamics%s',p.Results.fluorchan);
-save(fullfile(logpath,filename),'unitOfLife');
+end
+
+function [unitOfLife]=distillDataFromMovie(map,unitOfLife,method,IM,tind)
+%% The methods available for gathering single cell measurements are:
+%1. ellipse: The shape used for segmentation is an ellipse.
+switch lower(method)
+    case 'ellipse'
+        %Initialize the arrays that will contain the points that describe
+        %the ellipse
+        xellipse=zeros(38,1);
+        yellipse=zeros(38,1);
+        rho = (0:9:333)/53;
+        rhocos=cos(rho);
+        rhosin=sin(rho);
+        mapIndex = find(map)';
+        for i=mapIndex
+            k = unitOfLife(i).timePoints == tind;
+            if sum(k) > 1
+                msg = sprintf('\n%d at time %d has a problem with the log file entries\n',i, tind);
+                disp(msg);
+                continue
+            end
+            %All numbers that describe the ellipse must be rounded in
+            %order to be discretized, i.e. refer to a pixel coordinate
+            if unitOfLife(i).angle(k) == 0 || unitOfLife(i).angle(k) == 180
+                a = round(unitOfLife(i).major(k)/2);
+                b = round(unitOfLife(i).minor(k)/2);
+            elseif unitOfLife(i).angle(k) == 90 || unitOfLife(i).angle(k) == 270
+                a = round(unitOfLife(i).minor(k)/2);
+                b = round(unitOfLife(i).major(k)/2);
+            end
+            %Centroid is determined
+            xm = round(unitOfLife(i).manualCentroid(k,1));
+            ym = round(unitOfLife(i).manualCentroid(k,2));
+            
+            %the points on the perimeter of the ellipse with the determined
+            %centroid and major/minor axes are calculated
+            for k=1:38
+                x=xm+a*rhocos(k);
+                y=ym+b*rhosin(k);
+                xellipse(k) = round(x);
+                yellipse(k) = round(y);
+            end
+            %The pixels within the elipse are determined with the function
+            %roipoly and their mean intensities are stored in the output array
+            BW = roipoly(IM,yellipse,xellipse); %BW is a binary mask
+            IM_temp = IM;
+            unitOfLife(i).meanIntensity(end+1) = mean(IM_temp(BW));
+            unitOfLife(i).timePoints2(end+1) = tind;
+        end
+    case 'watershed'
+    otherwise
+        error('unknown segmentation method input into getMovieMeasurements.m')
+end
+end
+
+function [linkmap,uniqueUOL] = findLinkMap(unitOfLife)
 %% link the cell segments together
 linkmap = cell(1,length(unitOfLife));
 parent_all = [unitOfLife(:).parent];
@@ -322,12 +403,7 @@ for i=1:realrootnodeslength
     end
 end
 %Now I will pull the data out of the unitOfLife structure
-uniqueUOL = struct('timePoints', {}, ...
-    'linkmap', {}, ...
-    'divisionbool', {}, ...
-    'divisionTime', {}, ...
-        'meanIntensity', {});
-uniqueUOL(realrootnodeslength).timePoints = []; %initialize the struct
+uniqueUOL = initializeUniqueUOL(realrootnodeslength);
 
 for i=1:realrootnodeslength
     uniqueUOL(i).linkmap = uniqueRootNodeLinkmap{i};
@@ -338,76 +414,41 @@ for i=1:realrootnodeslength
         uniqueUOL(i).divisionTime = cat(2,uniqueUOL(i).divisionTime,unitOfLife(j).divisionTime);
     end
 end
+end
 
-%smooth the traces.
+function [unitOfLife] = initializeUniqueUOL(numberOfCells)
+%% Initialize the struct that holds all the cellular information
+unitOfLife = struct('timePoints', {}, ...
+    'linkmap', {}, ...
+    'divisionbool', {}, ...
+    'divisionTime', {}, ...
+    'meanIntensity', {});
+unitOfLife(numberOfCells).timePoints = []; %initialize the struct
+end
+
+function [bkgdTrace,bkgdTimepoints] = calculateBackground(unitOfLife_bkgd)
+%Assumes each trace is of the same length, which is also the entire length
+%of the movie.
+totalbkgd = [unitOfLife_bkgd(:).meanIntensity];
+totalbkgd = reshape(totalbkgd,[],length(unitOfLife_bkgd));
+bkgdTrace = mean(totalbkgd,2)'; 
+%bkgdstd = std(totalbkgd);
+%bkgdmax = max(totalbkgd);
+%bkgdmin = min(totalbkgd;
+bkgdTimepoints = unitOfLife_bkgd.timePoints2;
+end
+
+function [unitOfLife] = subtractBackground(unitOfLife,bkgdTrace,bkgdTimepoints)
+
+for i=1:length(unitOfLife)
+    for j=1:length(unitOfLife(i).timePoints2)
+    unitOfLife(i).meanIntensity(j) = unitOfLife(i).meanIntensity(j) - bkgdTrace(bkgdTimepoints==unitOfLife(i).timePoints2(j));
+    end
+end
+end
+
+function [uniqueUOL] = smoothenedsignal(uniqueUOL)
 for i=1:realrootnodeslength
     uniqueUOL(i).meanIntensity = smooth(uniqueUOL(i).meanIntensity,5);
 end
-
-%estimate the background from the minimum of the traces...
-backgroundmatrix = zeros(realrootnodeslength,865);
-for i=1:realrootnodeslength
-backgroundmatrix(i,uniqueUOL(i).timePoints) = uniqueUOL(i).meanIntensity;
-end
-backgroundmatrix(backgroundmatrix==0)=inf;
-minmatrix = min(backgroundmatrix);
-minmatrix = minmatrix(1:4:865);
-figure
-plot(minmatrix)
-
-save(fullfile(logpath,'kewl'),'uniqueUOL');
-disp('cool')
-
-function [unitOfLife]=distillDataFromMovie(map,unitOfLife,method,IM,tind)
-%% The methods available for gathering single cell measurements are:
-%1. ellipse: The shape used for segmentation is an ellipse.
-switch lower(method)
-    case 'ellipse'
-        %Initialize the arrays that will contain the points that describe
-        %the ellipse
-        xellipse=zeros(38,1);
-        yellipse=zeros(38,1);
-        rho = (0:9:333)/53;
-        rhocos=cos(rho);
-        rhosin=sin(rho);
-        mapIndex = find(map)';
-        for i=mapIndex
-            k = unitOfLife(i).timePoints == tind;
-            if sum(k) > 1
-                msg = sprintf('\n%d at time %d has a problem with the log file entries\n',i, tind);
-                disp(msg);
-                continue
-            end
-            %All numbers that describe the ellipse must be rounded in
-            %order to be discretized, i.e. refer to a pixel coordinate
-            if unitOfLife(i).angle(k) == 0 || unitOfLife(i).angle(k) == 180
-                a = round(unitOfLife(i).major(k)/2);
-                b = round(unitOfLife(i).minor(k)/2);
-            elseif unitOfLife(i).angle(k) == 90 || unitOfLife(i).angle(k) == 270
-                a = round(unitOfLife(i).minor(k)/2);
-                b = round(unitOfLife(i).major(k)/2);
-            end
-            %Centroid is determined
-            xm = round(unitOfLife(i).manualCentroid(k,1));
-            ym = round(unitOfLife(i).manualCentroid(k,2));
-            
-            %the points on the perimeter of the ellipse with the determined
-            %centroid and major/minor axes are calculated
-            for k=1:38
-                x=xm+a*rhocos(k);
-                y=ym+b*rhosin(k);
-                xellipse(k) = round(x);
-                yellipse(k) = round(y);
-            end
-            %The pixels within the elipse are determined with the function
-            %roipoly and their mean intensities are stored in the output array
-            BW = roipoly(IM,yellipse,xellipse); %BW is a binary mask
-            IM_temp = IM;
-            unitOfLife(i).meanIntensity(end+1) = mean(IM_temp(BW));
-            unitOfLife(i).timePoints2(end+1) = tind;
-            fprintf(1,'.');
-        end
-    case 'watershed'
-    otherwise
-        error('unknown segmentation method input into getMovieMeasurements.m')
 end
