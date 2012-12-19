@@ -228,7 +228,7 @@ elseif ispc
     %'/S' displays files in specified directory and all subdirectories
     cd(stackpath)
     [~,filepaths] = system('dir /S /B *.png');
-    filepaths = textscan(filepaths,'%s');
+    filepaths = textscan(filepaths,'%s','Whitespace','\b\t');
     filepaths = filepaths{1};
 else
     error('manSeg:notApc','processManualSegTrackViaImageJ.m is currently configured to run on a pc');
@@ -434,6 +434,7 @@ for i=1:realrootnodeslength
     end
     uniqueUOL(i).deathbool = unitOfLife(uniqueRootNodeLinkmap{i}(end)).deathbool;
     uniqueUOL(i).deathTime = unitOfLife(uniqueRootNodeLinkmap{i}(end)).deathTime;
+    uniqueUOL(i).label = sprintf('Position %d, Cell %d',unitOfLife(uniqueRootNodeLinkmap{i}(1)).label(1),unitOfLife(uniqueRootNodeLinkmap{i}(1)).label(2));
     %remove superfluous information about divisions
     uniqueUOL(i).divisionbool = sum(uniqueUOL(i).divisionbool);
     uniqueUOL(i).divisionTime(uniqueUOL(i).divisionTime==0) = [];
@@ -448,6 +449,7 @@ unitOfLife = struct('timePoints', {}, ...
     'divisionTime', {}, ...
     'deathbool', {}, ...
     'deathTime', {}, ...
+    'label', {}, ...
     'meanIntensity', {});
 unitOfLife(numberOfCells).timePoints = []; %initialize the struct
 end
