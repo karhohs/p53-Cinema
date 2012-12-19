@@ -52,6 +52,10 @@ for i=1:length(uniqueUOL)
     str(end) = []; %remove the extra comma at the end
     timePoints.appendChild(docNode.createTextNode(str));
     newCell.appendChild(timePoints);
+    %-----add the label
+    label = docNode.createElement('label');
+    label.appendChild(docNode.createTextNode(uniqueUOL(i).label));
+    newCell.appendChild(label);
 end
 xmlwrite(fullfile(outpath,'data.xml'),docNode);
 end
