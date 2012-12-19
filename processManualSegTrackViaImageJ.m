@@ -41,6 +41,7 @@ end
 [linkmap,uniqueUOL] = findLinkMap(unitOfLife); %Connect the cell segments and output a unique representative cell from each cell genealogy.
 %smooth the signal
 uniqueUOL = smoothenedsignal(uniqueUOL);
+save(fullfile(logpath,'uniqueUOL'),'uniqueUOL','unitOfLife');
 %export data into the XML format, because it is an open format
 exportCellData2XML(uniqueUOL,logpath);
 
@@ -101,6 +102,8 @@ unitOfLife = struct('timePoints', {}, ...
     'nuclearSolidity', {}, ...
     'divisionbool', {}, ...
     'divisionTime', {}, ...
+    'deathbool', {}, ...
+    'deathTime', {}, ...
     'manualCentroid', {}, ...
     'major', {}, ...
     'minor', {}, ...
@@ -196,6 +199,18 @@ for j=1:numberOfCells
             dirConLogsArray(counter) = []; %Don't look at the same text file more than once
             break
         end
+    end
+end
+
+%interpret cells that did not divide, but have division time information as
+%cells that are undergoing cell death
+for i = 1:numberOfCells
+    if (unitOfLife(i).divisionbool == 0) && (sum(unitOfLife(i).divisionTime)>0)
+        unitOfLife(i).deathbool = 1;
+        unitOfLife(i).deathTime = unitOfLife(i).divisionTime;
+        unitOfLife(i).divisionTime = [];
+    else
+        unitOfLife(i).deathbool = 0;
     end
 end
 end
@@ -406,7 +421,7 @@ for i=1:realrootnodeslength
         end
     end
 end
-%Now I will pull the data out of the unitOfLife structure
+%pull the data out of the unitOfLife structure
 uniqueUOL = initializeUniqueUOL(realrootnodeslength);
 
 for i=1:realrootnodeslength
@@ -417,6 +432,11 @@ for i=1:realrootnodeslength
         uniqueUOL(i).divisionbool = cat(2,uniqueUOL(i).divisionbool,unitOfLife(j).divisionbool);
         uniqueUOL(i).divisionTime = cat(2,uniqueUOL(i).divisionTime,unitOfLife(j).divisionTime);
     end
+    uniqueUOL(i).deathbool = unitOfLife(uniqueRootNodeLinkmap{i}(end)).deathbool;
+    uniqueUOL(i).deathTime = unitOfLife(uniqueRootNodeLinkmap{i}(end)).deathTime;
+    %remove superfluous information about divisions
+    uniqueUOL(i).divisionbool = sum(uniqueUOL(i).divisionbool);
+    uniqueUOL(i).divisionTime(uniqueUOL(i).divisionTime==0) = [];
 end
 end
 
@@ -426,6 +446,8 @@ unitOfLife = struct('timePoints', {}, ...
     'linkmap', {}, ...
     'divisionbool', {}, ...
     'divisionTime', {}, ...
+    'deathbool', {}, ...
+    'deathTime', {}, ...
     'meanIntensity', {});
 unitOfLife(numberOfCells).timePoints = []; %initialize the struct
 end
@@ -435,7 +457,7 @@ function [bkgdTrace,bkgdTimepoints] = calculateBackground(unitOfLife_bkgd)
 %of the movie.
 totalbkgd = [unitOfLife_bkgd(:).meanIntensity];
 totalbkgd = reshape(totalbkgd,[],length(unitOfLife_bkgd));
-bkgdTrace = mean(totalbkgd,2)'; 
+bkgdTrace = mean(totalbkgd,2)';
 %bkgdstd = std(totalbkgd);
 %bkgdmax = max(totalbkgd);
 %bkgdmin = min(totalbkgd;
@@ -446,7 +468,7 @@ function [unitOfLife] = subtractBackground(unitOfLife,bkgdTrace,bkgdTimepoints)
 
 for i=1:length(unitOfLife)
     for j=1:length(unitOfLife(i).timePoints2)
-    unitOfLife(i).meanIntensity(j) = unitOfLife(i).meanIntensity(j) - bkgdTrace(bkgdTimepoints==unitOfLife(i).timePoints2(j));
+        unitOfLife(i).meanIntensity(j) = unitOfLife(i).meanIntensity(j) - bkgdTrace(bkgdTimepoints==unitOfLife(i).timePoints2(j));
     end
 end
 end
