@@ -460,10 +460,74 @@ function [bkgdTrace,bkgdTimepoints] = calculateBackground(unitOfLife_bkgd)
 totalbkgd = [unitOfLife_bkgd(:).meanIntensity];
 totalbkgd = reshape(totalbkgd,[],length(unitOfLife_bkgd));
 bkgdTrace = mean(totalbkgd,2)';
-%bkgdstd = std(totalbkgd);
-%bkgdmax = max(totalbkgd);
-%bkgdmin = min(totalbkgd;
+bkgdstd = std(totalbkgd,0,2)';
+bkgdmax = max(totalbkgd,[],2)';
+bkgdmin = min(totalbkgd,[],2)';
+bkgdstderr = bkgdstd/sqrt(length(unitOfLife_bkgd));
 bkgdTimepoints = unitOfLife_bkgd.timePoints2;
+
+%create background output
+docNode = com.mathworks.xml.XMLUtils.createDocument('background');
+data = docNode.getDocumentElement;
+popStat = docNode.createElement('population_statistics');
+%-----add background data for mean
+s = docNode.createElement('mean');
+%make data comma delimited
+str = sprintf('%0.5e,',bkgdTrace);
+str(end) = []; %remove the extra comma at the end
+s.appendChild(docNode.createTextNode(str));
+popStat.appendChild(s);
+%-----add background data for standard deviation
+s = docNode.createElement('std');
+%make data comma delimited
+str = sprintf('%0.5e,',bkgdstd);
+str(end) = []; %remove the extra comma at the end
+s.appendChild(docNode.createTextNode(str));
+popStat.appendChild(s);
+%-----add background data for max
+s = docNode.createElement('max');
+%make data comma delimited
+str = sprintf('%0.5e,',bkgdmax);
+str(end) = []; %remove the extra comma at the end
+s.appendChild(docNode.createTextNode(str));
+popStat.appendChild(s);
+%-----add background data for min
+s = docNode.createElement('min');
+%make data comma delimited
+str = sprintf('%0.5e,',bkgdmin);
+str(end) = []; %remove the extra comma at the end
+s.appendChild(docNode.createTextNode(str));
+popStat.appendChild(s);
+%-----add background data for standard error
+s = docNode.createElement('standard_error');
+%make data comma delimited
+str = sprintf('%0.5e,',bkgdstderr);
+str(end) = []; %remove the extra comma at the end
+s.appendChild(docNode.createTextNode(str));
+popStat.appendChild(s);
+%-----add data about timepoints
+timePoints = docNode.createElement('time_points');
+%make data comma delimited
+str = sprintf('%d,',bkgdTimepoints);
+str(end) = []; %remove the extra comma at the end
+timePoints.appendChild(docNode.createTextNode(str));
+popStat.appendChild(timePoints);
+data.appendChild(popStat);
+%fill the XML file with signal data for each background trace
+for i=1:length(unitOfLife_bkgd)
+    newCell = docNode.createElement('bkgd_trace');
+    newCell.setAttribute('id',num2str(i));
+    data.appendChild(newCell);
+    %-----add signal data for mean_intensity
+    signal = docNode.createElement('signal');
+    signal.setAttribute('type','mean_intensity');
+    %make data comma delimited
+    str = sprintf('%0.5e,',totalbkgd(:,i));
+    str(end) = []; %remove the extra comma at the end
+    signal.appendChild(docNode.createTextNode(str));
+    newCell.appendChild(signal);
+end
+xmlwrite('bkgd.xml',docNode);
 end
 
 function [unitOfLife] = subtractBackground(unitOfLife,bkgdTrace,bkgdTimepoints)
