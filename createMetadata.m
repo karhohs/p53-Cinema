@@ -35,12 +35,12 @@ stageLabel = docNode.createElement('stage-label');
 stageLabel.appendChild(docNode.createTextNode(p.stageLabelText));
 metadata.appendChild(stageLabel);
 %stage-position-x
-stagePositionX = docNode.createElement('stage-position-x');
-stagePositionX.appendChild(docNode.createTextNode(p.stagePositionXText));
-metadata.appendChild(stagePositionX);
+%stagePositionX = docNode.createElement('stage-position-x');
+%stagePositionX.appendChild(docNode.createTextNode(p.stagePositionXText));
+%metadata.appendChild(stagePositionX);
 %stage-position-y
-stagePositionY = docNode.createElement('stage-position-y');
-stagePositionY.appendChild(docNode.createTextNode(p.stagePositionYText));
-metadata.appendChild(stagePositionY);
+%stagePositionY = docNode.createElement('stage-position-y');
+%stagePositionY.appendChild(docNode.createTextNode(p.stagePositionYText));
+%metadata.appendChild(stagePositionY);
 %write to a file
 xmlwrite(p.filename,docNode);
