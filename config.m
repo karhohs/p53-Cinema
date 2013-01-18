@@ -49,6 +49,6 @@ eeeeee
     <convert12bitTo16bit boolean="true"></convert12bitTo16bit>
 </MetamorphSlideScan2PNG>
 <output_directory>
-    N:\LAHAV LAB\Kyle\Still_Images\SI_201211B\A549\0h-out
+    N:\LAHAV LAB\Sheng\Image\20130104_ff
 </output_directory>
 </p53Cinema_config>
