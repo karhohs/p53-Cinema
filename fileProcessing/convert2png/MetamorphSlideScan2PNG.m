@@ -33,6 +33,7 @@ function [] = MetamorphSlideScan2PNG(path)
 % It is often convenient to analyze z-stacks using maximum intensity
 % projection (MIP). This projects a 3D object onto a 2D plane that can then
 % be analyzed with existing 2D image processing techiniques.
+% Innocuous Change
 
 myConfig = openConfig();
 
