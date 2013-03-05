@@ -1,38 +1,51 @@
-function [] = MetamorphMDA2PNG(path)
-% [] = my_tiffStacker(path,positions,timepoints)
-% Input:
-% path: a char. The path to the folder that contains the raw TIFF images from
+%% MetamorphMDA2PNG
+% Converts a folder of TIFF images created via Metamorph into PNG images. A
+% mirrored folder containing XML files containing metadata for each image
+% is also created.
+%
+% PNG images are preferred to TIFF images, because the format is simpler
+% and more standardized. Also, the PNG has better lossless compression.
+%
+%   [] = my_tiffStacker(path,positions,timepoints)
+%
+%%% Input
+% * path: a char. The path to the folder that contains the raw TIFF images from
 % imageJ.
-% positions (optional): an array of positive integers. The integers in this array represent the
+% * positions (optional): an array of positive integers. The integers in this array represent the
 % positions for which stacks will be created.
-% timepoints (optional): a cell containing arrays of positive integers or
+% * timepoints (optional): a cell containing arrays of positive integers or
 % an array of positive integers. If it is a cell, then it must contain an
 % array for each position. If it is an array, only these timepoints will be
 % taken for each position.
 %
-% Output:
+%%% Output:
 % There is no direct argument output. Rather, stacks will be created from the
 % raw images and stored in a new directory called "Stacks" at the same
 % level as the path/ directory.
 %
-% Description:
+%%% Detailed Description
 % When an image is created in Metamorph's Multi-Dimensional-Acquisition it
 % is saved in the TIFF format. An inividual image is created for each each
 % stage position, wavelength, and timepoint. If z-positions are taken then
 % the individual images are instead stacks of z-positions.
 % When metamorph saves a .tif the filename has the following formats:
-% Multi-dim. Aq. = <user defined input>_w\d+<channel name>_s\d+_t\d+.tif
-% '_w' is the wavelength
-% '_s' is the stage position
-% '_t' is the time point (slidescan always has '_t1'; can it take time pts?)
+%
+% |"user defined input"_w\d+"channel name"_s\d+_t\d+.tif|
+%
+% * '_w' is the wavelength
+% * '_s' is the stage position
+% * '_t' is the time point (slidescan always has '_t1'; can it take time pts?)
+% 
 % This function collates the images of each position and wavelength into a
 % TIFF stack, because this format was necessary to view the images in
 % ImageJ and enable manual segmentation of the individual cells.
 %
-% Other Notes:
+%%% Other Notes
 % It is often convenient to analyze z-stacks using maximum intensity
 % projection (MIP). This projects a 3D object onto a 2D plane that can then
 % be analyzed with existing 2D image processing techiniques.
+function [] = MetamorphMDA2PNG(path)
+
 
 myConfig = openConfig();
 
