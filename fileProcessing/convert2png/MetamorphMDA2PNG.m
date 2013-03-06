@@ -1,7 +1,6 @@
 %% MetamorphMDA2PNG
-% Converts a folder of TIFF images created via Metamorph into PNG images. A
-% mirrored folder containing XML files containing metadata for each image
-% is also created.
+% Converts a folder of TIFF images created via Metamorph into PNG images.
+% An XML file containing metadata about all the images is also created.
 %
 % PNG images are preferred to TIFF images, because the format is simpler
 % and more standardized. Also, the PNG has better lossless compression.
@@ -9,19 +8,13 @@
 %   [] = my_tiffStacker(path,positions,timepoints)
 %
 %%% Input
-% * path: a char. The path to the folder that contains the raw TIFF images from
-% imageJ.
-% * positions (optional): an array of positive integers. The integers in this array represent the
-% positions for which stacks will be created.
-% * timepoints (optional): a cell containing arrays of positive integers or
-% an array of positive integers. If it is a cell, then it must contain an
-% array for each position. If it is an array, only these timepoints will be
-% taken for each position.
+% * path: a char. The path to the folder that contains the orignal TIFF
+% images from metamorph.
 %
 %%% Output:
-% There is no direct argument output. Rather, stacks will be created from the
-% raw images and stored in a new directory called "Stacks" at the same
-% level as the path/ directory.
+% There is no direct argument output. Rather, a new folder will be created
+% that contains PNG images and other files that will later be accessed by
+% p53Cinema.
 %
 %%% Detailed Description
 % When an image is created in Metamorph's Multi-Dimensional-Acquisition it
@@ -34,32 +27,24 @@
 %
 % * '_w' is the wavelength
 % * '_s' is the stage position
-% * '_t' is the time point (slidescan always has '_t1'; can it take time pts?)
-% 
-% This function collates the images of each position and wavelength into a
-% TIFF stack, because this format was necessary to view the images in
-% ImageJ and enable manual segmentation of the individual cells.
+% * '_t' is the time point
 %
 %%% Other Notes
-% It is often convenient to analyze z-stacks using maximum intensity
-% projection (MIP). This projects a 3D object onto a 2D plane that can then
-% be analyzed with existing 2D image processing techiniques.
+% 
 function [] = MetamorphMDA2PNG(path)
-
-
-myConfig = openConfig();
-
 cd([path,'\..']);
+outpath = fullfile(pwd,'p53Cinema');
 warning('off','MATLAB:tifflib:libraryWarning');
-% ----- Organizing the filenames -----
-%The filenames are organized within a 3D (i,j,k) matrix where each dimension
-%represents either time, position, or wavelength (i=time, j=position,
-%k=wavelength). This organization facilitates the collating these images
-%into TIFF stacks.
-
+%% Organizing the filenames
+% The filenames are organized within a 3D (i,j,k) matrix where each
+% dimension represents either time, position, or wavelength (i=time,
+% j=position, k=wavelength). This organization facilitates the collating
+% these images into TIFF stacks.
+%
+%   FileNames(Time,Position,Channel);
 FileNames=cell(2048,256,8); %Assumes there will not be more than 2048 timepoints (over a week at images every 5 minutes), 256 positions, or more than 8 channels. If there are, change this number. It has been pre-allocated for speed.
-%FileNames(Time,Position,Channel)
-disp(['working in ', path]); %Collect the directory contents
+%% 
+% Collect the directory contents
 dirCon = dir(path);
 [S,T,W]=deal(zeros(length(dirCon),1));
 for i = 1:length(dirCon)
@@ -108,13 +93,10 @@ end
 %find the label
 labelText = regexp(dirCon(ind_findwavelength).name,'.+(?=_w)','match','once');
 %create the root directory that will store the PNG images and metadata
-outpath = myConfig.output_directory.txtd8a{1};
-pngpath = fullfile(outpath,sprintf('%s_png',labelText));
+pngpath = fullfile(outpath,'png');
 mkdir(pngpath);
-metadatapath = fullfile(outpath,sprintf('%s_metadata',labelText));
-mkdir(metadatapath);
-
-%make the PNG images and metadata XML files
+%% make the PNG images
+%
 for i = Sunique
     %Create the position directory
     positionpath = fullfile(pngpath,sprintf('position%d',i));
