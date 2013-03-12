@@ -295,7 +295,7 @@ for i = Sunique
     end
 end
 save(fullfile(outpath,'imageMetadata'),'imageMetadata');
-%% Create or append a log file
+%% Create a log file
 % 
-fid = fopen(fullfile(outpath,'log.txt'),'a+');
-fprintf(fid,'%s: importFromMetamorphMDA: TIFF images from the folder ''%s'' were converted to PNG images along with metadata in the folder ''%s''.\r\n\r\n',date,inpath,outpath);
+fid = fopen('log.txt','w');
+fprintf(fid,'%s: TIFF images from the folder ''%s'' were converted into PNG images along with metadata in the folder ''%s''',date,inpath,outpath);

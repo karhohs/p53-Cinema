@@ -100,9 +100,11 @@
 % images are 12-bit otherwise, this may cause loss of information or
 % insufficient stretching.
 %
-% <html> For images collected through the multi-dimensional-aquisition app
-% in Metamorph use the function <a
-% href="importFromMetamorphMDA.html">importFromMetamorphMDA</a>. </html>
+% <html> 
+% For images collected through the multi-dimensional-aquisition app in
+% Metamorph use the function <a
+% href="importFromMetamorphMDA.html">importFromMetamorphMDA</a>.
+% </html>
 %
 
 %% Flat-field and dark-field correction
@@ -110,6 +112,30 @@
 % microscope. It is highly recommended that these images are collected for
 % each experiment to achieve the highest quality of data for
 % quantification.
+%
+% The flat field images can be snapshots created through the
+% multi-dimensional-aquisition toolbox. The file names must be of a
+% specific pattern. First, they need to be saved as TIFF images; TIFF is
+% the default format of metamorph. Second, the names have to be constructed
+% as |"name of channel"_"length of exposure in milliseconds".tif|. For
+% example |YFP_0.tif| for the darkfield YFP image or |DAPI_200.tif| for a
+% DAPI image exposed for 200ms. Four to six images should be collected for
+% each fluorescent channel. Do not exceed 2000ms of exposure. I like to
+% re-use an empty MatTek dish filled with any old media that has
+% phenol-red. No correction is made for phase-contrast images.
+%
+% The easiest way to collect the dark field image is to direct the light
+% path into the eye pieces, which prevents light from reaching the camera.
+% Then take an image with an exposure on the order of the exposure to be
+% used in the movie. Using 50ms as a standard works well. Despite using a
+% measurable length of exposure, which measures signal generated from
+% thermal noise, the length of exposure in the name of the file should
+% still be |0|, since no light is reaching the camera.
+%
+% <html> 
+% For correcting flat-field and dark-field biases use <a
+% href="flatfieldcorrection.html">flatfieldcorrection</a>.
+% </html>
 %% High Dynamic Range images
 % Sometimes the signal under study can vary over several orders of
 % magnitude. When this is the case it is difficult to capture the full
