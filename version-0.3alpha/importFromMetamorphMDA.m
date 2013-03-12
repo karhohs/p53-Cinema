@@ -18,6 +18,13 @@
 % that contains PNG images and other files that will later be accessed by
 % p53Cinema.
 %
+% The metadata collected are
+% * image filename
+% * time of acquisition
+% * wavelength names (or the names of the fluorophores)
+% * exposure times
+% * x, y, and z stage position for each image
+% * the maximum number of stage positions, wavelengths, timepoints, and z steps.
 %%% Detailed Description
 % When an image is created in Metamorph's Multi-Dimensional-Acquisition it
 % is saved in the TIFF format. An inividual image is created for each each
@@ -119,6 +126,7 @@ Wunique = Wunique(Wunique~=0);
 % The names of the wavelengths are extracted from the metadata stored in
 % first image found for each unique wavelength number.
 Wnames = cell(size(Wunique));
+Wexp = cell(size(Wunique));
 for i=1:length(Wunique)
     ind_findwavelength = find(W==Wunique(i),1,'first');
     filename_findwavelength = dirCon(ind_findwavelength).name;
@@ -139,6 +147,12 @@ for i=1:length(Wunique)
                 Wnames{i} = regexprep(Wnames{i},'\s',''); %Remove all not(alphabetic, numeric, or underscore) characters
                 Wnames{i} = regexprep(Wnames{i},'tocamera','','ignorecase'); %remove 'tocamera' if present b/c it is not informative
                 Wnames{i} = regexprep(Wnames{i},'camera','','ignorecase'); %remove 'camera' if present b/c it is not informative
+            end
+            if strcmp(my_list.item(j).getAttribute('id').toString.toCharArray','Description')
+                Wexp{i} = my_list.item(j).getAttribute('value').toString.toCharArray';
+                %Find the exposure time
+                Wexp{i} = regexp(Wexp{i},'Exposure: (\d+)','tokens');
+                Wexp{i} = Wexp{i}{1}{1};
             end
         end
     end
@@ -188,7 +202,15 @@ imageMetadata.numbers.howManyS = max(Sunique);
 imageMetadata.numbers.howManyW = max(Wunique);
 imageMetadata.numbers.howManyT = max(Tunique);
 imageMetadata.numbers.howManyZ = numberZposMax;
-imageMetadata.wavelengthNames = Wnames;
+imageMetadata.wavelengthInfo = vertcat(num2cell(Wunique),Wnames,Wexp);
+imageMetadata.wavelengthInfo = transpose(imageMetadata.wavelengthInfo);
+header = {'index','name','exposure (ms)'};
+imageMetadata.wavelengthInfo = vertcat(header,imageMetadata.wavelengthInfo);
+imageMetadata.filenames = cell(imageMetadata.numbers.howManyS, imageMetadata.numbers.howManyW, imageMetadata.numbers.howManyT, imageMetadata.numbers.howManyZ);
+imageMetadata.timeOfAcquisition = cell(size(imageMetadata.filenames)); %Units are in days
+imageMetadata.stagePosition.x = zeros(imageMetadata.numbers.howManyS,1);
+imageMetadata.stagePosition.y = zeros(imageMetadata.numbers.howManyS,1);
+imageMetadata.stagePosition.z = zeros(imageMetadata.numbers.howManyZ,1);
 for i = Sunique
     for j = Wunique
         for k = Tunique
@@ -235,16 +257,11 @@ for i = Sunique
                             I = bitshift(I,4);
                     end
                     
-                    filenamePNG = fullfile(wavepath,sprintf('%s_s%d_w%d%s_t%d_z%d.png',labelText,i,j,Wnames{j},k,h));
-                    imwrite(I,filenamePNG,'png','bitdepth',16);
-                    %Create the metadatafile
-                    p.filename = fullfile(wavepathmeta,sprintf('%s_s%d_w%d%s_t%d_z%d.xml',labelText,i,j,Wnames{j},k,h));
-                    p.labelText = labelText;
-                    p.zSliceText = num2str(h);
-                    p.positionText = num2str(i);
-                    p.timepointText = num2str(k);
-                    p.wavelengthTypeText = Wnames{j};
-                    %Explore the image description in the TIFF
+                    filenamePNG = sprintf('%s_s%d_w%d%s_t%d_z%d.png',labelText,i,j,Wnames{j},k,h);
+                    imwrite(I,fullfile(pngpath,filenamePNG),'png','bitdepth',16);
+                    imageMetadata.filenames{i,j,k,h} = filenamePNG;
+                    %% Pull info from the image description in the TIFF
+                    %
                     metadata = t.getTag('ImageDescription');
                     fid = fopen('t3mp.xml','w');
                     fprintf(fid,'%s',metadata);
@@ -255,18 +272,19 @@ for i = Sunique
                     for g=0:my_list.getLength-1
                         if my_list.item(g).hasAttributes
                             if strcmp(my_list.item(g).getAttribute('id').toString.toCharArray','acquisition-time-local')
-                                p.timeOfAcquisitionText = my_list.item(g).getAttribute('value').toString.toCharArray';
-                            elseif strcmp(my_list.item(g).getAttribute('id').toString.toCharArray','stage-label')
-                                p.stageLabelText = my_list.item(g).getAttribute('value').toString.toCharArray';
+                                timetext = my_list.item(g).getAttribute('value').toString.toCharArray';
+                                myTokens = regexpi(timetext,'(\d{4})(\d{2})(\d{2}) (\d+):(\d+):(\d+\.?\d*)','tokens');
+                                imageMetadata.timeOfAcquisition{i,j,k,h} = datenum(str2double(myTokens{1}{1}),str2double(myTokens{1}{2}),str2double(myTokens{1}{3}),str2double(myTokens{1}{4}),str2double(myTokens{1}{5}),str2double(myTokens{1}{6}));
                             elseif strcmp(my_list.item(g).getAttribute('id').toString.toCharArray','stage-position-x')
-                                p.stagePositionXText = my_list.item(g).getAttribute('value').toString.toCharArray';
+                                imageMetadata.stagePosition.x(i) = str2double(my_list.item(g).getAttribute('value').toString.toCharArray');
                             elseif strcmp(my_list.item(g).getAttribute('id').toString.toCharArray','stage-position-y')
-                                p.stagePositionYText = my_list.item(g).getAttribute('value').toString.toCharArray';
+                                imageMetadata.stagePosition.y(i) = str2double(my_list.item(g).getAttribute('value').toString.toCharArray');
+                            elseif strcmp(my_list.item(g).getAttribute('id').toString.toCharArray','z-position')
+                                imageMetadata.stagePosition.z(h) = str2double(my_list.item(g).getAttribute('value').toString.toCharArray');
                             end
                         end
                     end
                     delete('t3mp.xml');
-                    createMetadata(p);
                     if ~t.lastDirectory
                         t.nextDirectory;
                     end
@@ -276,3 +294,4 @@ for i = Sunique
         end
     end
 end
+save(fullfile(outpath,'imageMetadata'),'imageMetadata');

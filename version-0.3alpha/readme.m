@@ -1,5 +1,5 @@
 %% README
-% A tutorial on how to use p53Cinema and a discussion of its pitfalls.
+% *A tutorial and discussion on how to use p53Cinema*
 %
 % *Caveat emptor* This code was written for the Lahav Lab, which uses
 % specific hardware, specific protocols, and specific cell lines.
@@ -41,10 +41,8 @@
 % Another reason to follow the recommended microscope settings is this
 % software was written for images collected using these settings. The
 % software may not work as intended if other settings or microscope
-% equipment is used, so please think carefully about this. Therefore,
-% please use the following microscope settings when performing time-lapse
-% fluorescence microscopy:
-%
+% equipment is used, so please keep this in mind. Please use the following
+% microscope settings when performing time-lapse fluorescence microscopy:
 %% Recommended Microscope Settings
 % Please use the following settings for time-lapse fluorescence
 % microscopy... 
@@ -52,7 +50,7 @@
 % # *Use a binning of _2_* The binning can help in several ways. It can
 % reduce the file size (albeit this is not always an improvement, e.g. this
 % is a terrible idea if doing smFISH where detection of the PSF is vital).
-% It can improve signal to noise by reducing the read noise (which is
+% Binning can improve signal to noise by reducing the read noise (which is
 % typically insignificant if not doing single fluorophore work). It reduces
 % the length of exposure necessary to fill the dynamic range of the camera;
 % this last point is probably the most significant advantage to binning.
@@ -81,7 +79,7 @@
 % autofluorescence is measured in the focal volume, which can reduce the
 % signal to noise ratio. Keep in mind that 20x is fine for measuring a
 % diffuse nuclear signal, but not sub-nuclear structures. For instance,
-% when Ketki was measuring the dynamics of p53bp51 foci she had to use 60x
+% when Ketki was measuring the dynamics of p53bp1 foci she had to use 60x
 % to get enough spatial resolution to identify individual foci.
 % # *A note on exposures* The length of exposure for one microscope does
 % not translate to the length of exposure on another microscope.
@@ -93,6 +91,20 @@
 % differ in number per target and quantum efficiency. Therefore, the
 % exposure must be tuned for each channel on each microscope individually.
 % # *Another note about exposure*
+%% Converting TIFF images into PNG images
+% PNG images are a convenient lossless image format that is more
+% standardized than the TIFF format. Metadata is stored in a separate file.
+% Part of the conversion process takes a 12-bit image that is created by
+% the cameras used in the Lahav lab and _stretches_ it across a 16-bit
+% range, which is a common image bit-depth. Please make sure the input
+% images are 12-bit otherwise, this may cause loss of information or
+% insufficient stretching.
+%
+% <html> For images collected through the multi-dimensional-aquisition app
+% in Metamorph use the function <a
+% href="importFromMetamorphMDA.html">importFromMetamorphMDA</a>. </html>
+%
+
 %% Flat-field and dark-field correction
 % Flatfield and darkfield images can be measured directly from the
 % microscope. It is highly recommended that these images are collected for
@@ -114,11 +126,3 @@
 % choose the longest exposure you are comfortable with to capture dim
 % objects, then determine the shorter exposure by dividing this exposure by
 % 8.
-%% Converting TIFF images into PNG images
-% PNG images are a convenient lossless image format that is more
-% standardized than the TIFF format. Metadata is stored in a separate file.
-% Part of the conversion process takes a 12-bit image that is created by
-% the cameras used in the Lahav lab and _stretches_ it across a 16-bit
-% range, which is a common image format. Please make sure the input images
-% are 12-bit otherwise, this may cause loss of information or insufficient
-% stretching.
