@@ -27,9 +27,9 @@
 % * the maximum number of stage positions, wavelengths, timepoints, and z steps.
 %%% Detailed Description
 % When an image is created in Metamorph's Multi-Dimensional-Acquisition it
-% is saved in the TIFF format. An inividual image is created for each each
-% stage position, wavelength, and timepoint. If z-positions are taken then
-% the individual images are instead TIFF stacks.
+% is saved in the TIFF format. An inividual image is created for each stage
+% position, wavelength, and timepoint. If z-positions are taken then the
+% individual images are instead TIFF stacks.
 %
 % When metamorph saves a |.tif| the filename has the following format:
 %
@@ -53,6 +53,10 @@
 %%% Other Notes
 % 
 function [] = importFromMetamorphMDA(inpath,outpath)
+p = inputParser;
+p.addRequired('inpath', @(x) ischar(x));
+p.addRequired('outpath', @(x) ischar(x));
+p.parse(path,outpath);
 warning('off','MATLAB:tifflib:libraryWarning');
 %%
 % *Look to see if the outpath is an existing directory*
@@ -298,4 +302,4 @@ save(fullfile(outpath,'imageMetadata'),'imageMetadata');
 %% Create or append a log file
 % 
 fid = fopen(fullfile(outpath,'log.txt'),'a+');
-fprintf(fid,'%s: importFromMetamorphMDA: TIFF images from the folder ''%s'' were converted to PNG images along with metadata in the folder ''%s''.\r\n\r\n',date,inpath,outpath);
+fprintf(fid,'%s: importFromMetamorphMDA: TIFF images from the folder ''%s'' were converted to PNG images, and along with metadata, added to the folder ''%s''.\r\n\r\n',date,inpath,outpath);

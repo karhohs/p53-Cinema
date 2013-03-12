@@ -7,26 +7,30 @@
 %   [] = makeoffset(path,ffpath)
 %
 %%% Input:
-% * path: the location of outpath created by |importFromMetamorphMDA|. The
-% PNG images within will be flat field corrected. The function
-% |importFromMetamorphMDA| should be run beforehand.
+% * chan: the name of the channel to have an offset image created.
 % * ffpath: the location of the correction images
 %
 %%% Output:
-% There is no direct argument output. Existing PNG images in the _path_ are
-% flatfield corrected.
+% An offset image is created and written to the directory that contains the
+% flat field images.
 %
 %%% Description:
 %
 %
 % Other Notes:
-% Assumes the image files have been converted to the PNG format
+% 
 function []=makeoffset(chan,ffpath)
 disp(['making offset image for the ' chan ' channel...'])
 info = imfinfo([ffpath,'\',chan,'_0'],'tif');
 IM=double(imread([ffpath,'\',chan,'_0'],'tif','Info',info));
-h = fspecial('gaussian',[21 21],3.5);
+%%
+% scale from 12-bit image to 16-bit image
+IM = uint16(IM);
+IM = bitshift(IM,4);
+%% smooth the image
+%
+IM = medfilt2(IM,[15,15],'symmetric');
+h = fspecial('average',[15 15]);
 IM=imfilter(IM,h,'replicate');
-IM=uint16(IM);
 imwrite(IM,[ffpath,'\',chan,'_offset.tif'],'tif','Compression','none');
 end

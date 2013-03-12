@@ -76,7 +76,7 @@ for j=1:hei
     end
 end
 gainIM=gainIM/mean(mean(gainIM));
-h = fspecial('gaussian',[21 21],3.5);
+h = fspecial('average',[15 15]);
 gainIM=imfilter(gainIM,h,'replicate');
 max_temp=max(max(gainIM));
 max_temp=round(max_temp*1000)/1000;

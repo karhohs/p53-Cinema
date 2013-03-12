@@ -1,4 +1,20 @@
-%----- SUBFUNCTION LEASTSQUARESFIT -----
+%% leastsquaresfit
+% a least squares fit with just a few lines of code.
+%
+%   [] = leastsquaresfit(x,y,j,k)
+%
+%%% Input:
+% 
+%
+%%% Output:
+% * b: the slope of a line
+% * a: the offset of the line
+%
+%%% Description:
+% 
+%
+% Other Notes:
+% 
 function [a,b]=leastsquaresfit(x,y,j,k)
 xm=mean(x);
 ym=mean(y);
