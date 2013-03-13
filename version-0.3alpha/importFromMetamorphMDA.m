@@ -6,7 +6,7 @@
 % and more standardized. Also, the PNG has better lossless compression for
 % this type of image.
 %
-%   [] = my_tiffStacker(inpath,outpath)
+%   [] = importFromMetamorphMDA(inpath,outpath)
 %
 %%% Input
 % * inpath: a char. The path to the folder that contains the orignal
