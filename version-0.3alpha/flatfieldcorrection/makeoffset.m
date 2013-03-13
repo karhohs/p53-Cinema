@@ -33,13 +33,9 @@ IM = bitshift(IM,4);
 % depending on whether or not there is binning. The size of the image will
 % influence the size of the filters used to smooth the image.
 if info.Width == 1344
-    IM = medfilt2(IM,[31,31],'symmetric'); %median filters are good for salt and pepper noise like that seen in the darkfield image
-    h = fspecial('average',[31 31]); %the average filter removes abrupt spatial changes in intensity
-    IM=imfilter(IM,h,'replicate'); 
+    IM = medfilt2(IM,[17,17],'symmetric'); %median filters are good for salt and pepper noise like that seen in the darkfield image
 else
-    IM = medfilt2(IM,[15,15],'symmetric');
-    h = fspecial('average',[15 15]);
-    IM=imfilter(IM,h,'replicate');
+    IM = medfilt2(IM,[9,9],'symmetric');
 end
 imwrite(IM,fullfile(ffpath,strcat(chan,'_offset.tif')),'tif','Compression','none');
 end
