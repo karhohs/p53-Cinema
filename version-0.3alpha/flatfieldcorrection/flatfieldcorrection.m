@@ -188,6 +188,7 @@ for i=1:length(channels_stacks)
     fprintf(fid,'%s\r\n',channels_stacks{i});
 end
 fprintf(fid,'\r\n');
+fclose(fid);
 end
 
 
