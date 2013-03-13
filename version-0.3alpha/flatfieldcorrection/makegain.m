@@ -26,7 +26,7 @@ disp(['making gain image for the ' chan ' channel...'])
 % identify all the exposure images
 Temp=cell([1,length(dirCon_ff)]); %Initialize cell array
 % ----- Identify the legitimate stacks -----
-expr=[chan '(?=_\d+)'];
+expr=strcat(chan,'(?=_\d+)');
 i=1;
 for j=1:length(dirCon_ff)
     Temp2=regexp(dirCon_ff(j).name,expr,'match','once','ignorecase');
@@ -38,7 +38,7 @@ end
 % ----- Remove empty cells -----
 Temp(i:end)=[];
 %identify the length of exposure for each image
-expr=[chan '_(\d+)'];
+expr=strcat(chan,'_(\d+)');
 exposure = zeros(size(Temp));
 flatfieldIM = cell(size(Temp));
 for i=1:length(Temp)
@@ -47,8 +47,9 @@ for i=1:length(Temp)
     if exposure == 0
         ind = i;
     end
-    info = imfinfo([ffpath,'\',chan,'_0'],'tif');
-    flatfieldIM{i}=double(imread([ffpath,'\',Temp{i}],'tif','Info',info));
+    fname = fullfile(ffpath,strcat(chan,'_0'));
+    info = imfinfo(fullfile(ffpath,strcat(chan,'_0')),'tif');
+    flatfieldIM{i}=double(imread(fullfile(ffpath,Temp{i}),'tif','Info',info));
 end
 
 %% weight the dark image by 5
@@ -83,5 +84,5 @@ max_temp=round(max_temp*1000)/1000;
 im_temp=gainIM*65536/max_temp;
 im_temp=uint16(im_temp);
 max_temp=sprintf('%d',max_temp*1000);
-imwrite(im_temp,[ffpath,'\',chan,'_gain',max_temp,'.tif'],'tif','Compression','none');
+imwrite(im_temp,fullfile(ffpath,strcat(chan,'_gain',max_temp,'.tif')),'tif','Compression','none');
 end

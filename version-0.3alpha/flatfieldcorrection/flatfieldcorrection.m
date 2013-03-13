@@ -128,8 +128,9 @@ dirCon_ff = dir(ffpath);
 for j=1:length(channels_stacks)
     %%
     % Import the gain and offset image for a given fluorescent channel
-    info = imfinfo([ffpath,'\',channels_stacks{j},'_offset'],'tif');
-    offset = double(imread([ffpath,'\',channels_stacks{j},'_offset'],'tif','Info',info));
+    fname = fullfile(ffpath,strcat(channels_stacks{j},'_offset'));
+    info = imfinfo(fname,'tif');
+    offset = double(imread(fname,'tif','Info',info));
     for k=1:length(dirCon_ff)
         temp = regexp(dirCon_ff(k).name,[channels_stacks{j} '_gain\d+'],'match','once','ignorecase');
         if ~isempty(temp)
@@ -137,8 +138,8 @@ for j=1:length(channels_stacks)
             break
         end
     end
-    info = imfinfo([ffpath,'\',gainname],'tif');
-    gain = double(imread([ffpath,'\',gainname],'tif','Info',info));
+    info = imfinfo(fullfile(ffpath,gainname),'tif');
+    gain = double(imread(fullfile(ffpath,gainname),'tif','Info',info));
     expr='(?<=_gain)\d+';
     max_temp=regexp(gainname,expr,'match','once');
     max_temp=str2double(max_temp)/1000;

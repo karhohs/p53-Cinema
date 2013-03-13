@@ -21,8 +21,9 @@
 % 
 function []=makeoffset(chan,ffpath)
 disp(['making offset image for the ' chan ' channel...'])
-info = imfinfo([ffpath,'\',chan,'_0'],'tif');
-IM=double(imread([ffpath,'\',chan,'_0'],'tif','Info',info));
+fname = fullfile(ffpath,strcat(chan,'_0'));
+info = imfinfo(fname,'tif');
+IM=double(imread(fname,'tif','Info',info));
 %%
 % scale from 12-bit image to 16-bit image
 IM = uint16(IM);
@@ -32,5 +33,5 @@ IM = bitshift(IM,4);
 IM = medfilt2(IM,[15,15],'symmetric');
 h = fspecial('average',[15 15]);
 IM=imfilter(IM,h,'replicate');
-imwrite(IM,[ffpath,'\',chan,'_offset.tif'],'tif','Compression','none');
+imwrite(IM,fullfile(ffpath,strcat(fname,'_offset.tif')),'tif','Compression','none');
 end
