@@ -48,7 +48,7 @@ p.parse(path,ffpath);
 load(fullfile(path,'imageMetadata.mat'));
 % Check if the computer is a mac (for fun).
 if ismac
-    fprintf(1,'Isn''t owning a Mac wonderful?');
+    fprintf(1,'Isn''t owning a Mac wonderful?\r\n');
 end
 disp(['working in ', path]); %Sanity Check
 % import directory of flatfield images
@@ -71,6 +71,16 @@ for j=1:length(dirCon_ff)
 end
 Temp(i:end)=[];
 channels_stacks = unique(Temp); %The different channels are saved
+%%
+% Compare these channel names to the channel names stored in the image
+% metadata.
+load(fullfile(path,'imageMetadata.mat'));
+for i=length(channels_stacks):-1:1
+   TF = strcmp(channels_stacks{i},imageMetadata.wavelengthInfo(2:end,2));
+   if sum(TF)==0
+       channels_stacks(i) = [];
+   end
+end
 
 if isempty(channels_stacks)
     error('fltfldcrct:noFF','No flatfield images are present or the file names do not follow the presriced format.')
