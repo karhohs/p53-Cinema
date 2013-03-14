@@ -113,11 +113,11 @@ for i=1:length(channels_stacks)
     switch outcome
         case 0 %No offset or gain image
             makeoffset(channels_stacks{i},ffpath);
-            makegain(channels_stacks{i},ffpath,dirCon_ff);
+            makegain(channels_stacks{i},ffpath);
         case 1 %just a gain image
             makeoffset(channels_stacks{i},ffpath);
         case 2 %just an offset image
-            makegain(channels_stacks{i},ffpath,dirCon_ff);
+            makegain(channels_stacks{i},ffpath);
         case 3 %both gain and offset exist
     end
 end

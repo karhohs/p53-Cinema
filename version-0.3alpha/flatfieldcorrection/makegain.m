@@ -2,7 +2,7 @@
 % The gain image contains weights to counter the natural bias found in
 % every pixel of the image. It is assumed that the measurement of light at
 % each pixel is related to the true incident light proportionally through
-% an absorbance constant. 
+% an absorbance constant.
 %
 %   [] = makeoffset(path,ffpath)
 %
@@ -21,8 +21,9 @@
 %
 % Other Notes:
 % Assumes the image files have been converted to the PNG format
-function []=makegain(chan,ffpath,dirCon_ff)
+function []=makegain(chan,ffpath)
 disp(['making gain image for the ' chan ' channel...'])
+dirCon_ff = dir(ffpath);
 % identify all the exposure images
 Temp=cell([1,length(dirCon_ff)]); %Initialize cell array
 % ----- Identify the legitimate stacks -----
@@ -30,8 +31,14 @@ expr=strcat(chan,'(?=_\d+)');
 i=1;
 for j=1:length(dirCon_ff)
     Temp2=regexp(dirCon_ff(j).name,expr,'match','once','ignorecase');
+    Temp3 = regexp(dirCon_ff(j).name,strcat(chan,'(?=_offset)'),'match','once','ignorecase');
     if Temp2
         Temp{i}=dirCon_ff(j).name;
+        i=i+1;
+    end
+    if Temp3
+        Temp{i}=dirCon_ff(j).name;
+        ind = i;
         i=i+1;
     end
 end
@@ -42,22 +49,20 @@ expr=strcat(chan,'_(\d+)');
 exposure = zeros(size(Temp));
 flatfieldIM = cell(size(Temp));
 for i=1:length(Temp)
-    [~, temp_num] = regexp(Temp{i},expr,'match','once','tokens');
-    exposure(i) = str2double(temp_num);
-    if exposure == 0
-        ind = i;
+    if i~=ind
+        [~, temp_num] = regexp(Temp{i},expr,'match','once','tokens');
+        exposure(i) = str2double(temp_num);
     end
-    fname = fullfile(ffpath,strcat(chan,'_0'));
-    info = imfinfo(fullfile(ffpath,strcat(chan,'_0')),'tif');
+    info = imfinfo(fullfile(ffpath,Temp{i}),'tif');
     flatfieldIM{i}=double(imread(fullfile(ffpath,Temp{i}),'tif','Info',info));
 end
-
-%% weight the dark image by 5
+flatfieldIM{ind} = flatfieldIM{ind}/16; %to compensate for the offset image being shifted over by 4 bits.
+%% weight the dark image
 % We have a high confidence in the dark field image and want the line to
 % pass through this point more than any other. Therefore it is weighted.
-Temp = zeros(1,5);
+Temp = zeros(1,4);
 exposure = [exposure Temp];
-Temp = cell(1,5);
+Temp = cell(1,4);
 flatfieldIM = [flatfieldIM Temp];
 for i=0:4
     flatfieldIM{end-i} = flatfieldIM{ind};
@@ -72,7 +77,7 @@ for j=1:hei
             y(i)=flatfieldIM{i}(j,k);
             x(i)=exposure(i);
         end
-        [~,b]=leastsquaresfit(x,y);
+        [~,b]=leastsquaresfit(x,y,j,k);
         gainIM(j,k)=b;
     end
 end
