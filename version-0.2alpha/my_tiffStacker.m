@@ -52,9 +52,9 @@ dirCon = dir(path);
 for i = 1:length(dirCon)
     if isempty(regexpi(dirCon(i).name,'_thumb')) && ...
             ~isempty(regexpi(dirCon(i).name,'(?<=(_s\d+).*)\.tif'))%Look at .tif images, but not "thumb" images
-        NTP=str2double(regexp(dirCon(i).name,'(?<=_t)\d+','match','once')); %Find the time point number
-        NPos=str2double(regexp(dirCon(i).name,'(?<=_s)\d+','match','once')); %Find the stage position number
-        NW=str2double(regexp(dirCon(i).name,'(?<=_w)\d+','match','once')); %Find the wavelength number
+        NTP=str2double(regexp(dirCon(i).name,'(?<=_w\d+.+_s\d+_t)\d+','match','once')); %Find the time point number
+        NPos=str2double(regexp(dirCon(i).name,'(?<=_w\d+.+_s)\d+(?=_t\d+)','match','once')); %Find the stage position number
+        NW=str2double(regexp(dirCon(i).name,'(?<=_w)\d+(?=.+_s\d+_t\d+)','match','once')); %Find the wavelength number
         FileNames{NTP,NPos,NW}=dirCon(i).name; %Cleverly store the file name in a cell
         if NPos>Smax %The maximum number of stage positions is found
             Smax=NPos;
@@ -116,7 +116,7 @@ for i=1:Wmax
                 Name_temp = regexprep(FileNames{k,j,i},'\s',''); %Remove all not(alphabetic, numeric, or underscore) characters
                 Name_temp = regexprep(Name_temp,'tocamera','','ignorecase'); %remove 'tocamera' if present b/c it is not informative
                 Name_temp = regexprep(Name_temp,'camera','','ignorecase'); %remove 'camera' if present b/c it is not informative
-                Name_temp = regexprep(Name_temp,'(?<=_t).*','STACK'); %'_t' is always at the end of the filename
+                Name_temp = regexprep(Name_temp,'(?<=_w\d+.+_s\d+_t).*','STACK'); %'_t' is always at the end of the filename
                 Name = [path2,'\p53CinemaSTACKS\',Name_temp,'.tif']; %generates the name of the stack
                 %appends the image to the tif file using no compression
                 %Loading the images is the most time intensive part of the code
